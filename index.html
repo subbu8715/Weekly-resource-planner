@@ -2,270 +2,506 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resource Availability Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.5.0/papaparse.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     body { font-family: 'Inter', sans-serif; }
-    .status-cell { min-width: 90px; height: 48px; display:flex; align-items:center; justify-content:center; border-radius:0.5rem; font-weight:600; }
+    .status-cell { min-width: 120px; height: 80px; transition: transform .2s; }
+    .status-cell:hover { transform: scale(1.05); z-index: 10; }
     .status-wfo { background-color:#166534; color:#fff; }
     .status-wfh { background-color:#86efac; color:#14532d; }
     .status-planned-leave { background-color:#f97316; color:#fff; }
     .status-unplanned-leave { background-color:#b91c1c; color:#fff; }
-    .status-default { background-color:#f3f4f6; color:#374151; }
-    th, td { white-space: nowrap; }
+    .status-default { background-color:#f3f4f6; }
+    .modal-backdrop { background-color: rgba(0,0,0,.5); transition: opacity .3s ease-in-out; }
+    .table-container::-webkit-scrollbar { display: none; }
+    .table-container { -ms-overflow-style:none; scrollbar-width:none; }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-800 antialiased">
-
-  <div class="container mx-auto p-4 md:p-6">
-    <header class="mb-4 md:mb-6">
-      <h1 class="text-2xl md:text-4xl font-bold text-gray-900">Resource Availability Tracker</h1>
-      <p class="text-sm text-gray-500 mt-1">Week format: Monday → Sunday. Bulk edits affect <b>Mon–Fri only</b>.</p>
+  <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+    <header class="text-center mb-6">
+      <h1 class="text-4xl font-bold text-gray-900">Resource Availability Tracker</h1>
+      <p id="week-range-display" class="text-xl text-gray-600 mt-2"></p>
     </header>
 
     <!-- Controls -->
-    <section class="bg-white rounded-xl shadow p-4 mb-4">
-      <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div class="flex flex-wrap items-center gap-3">
-          <label class="text-sm font-medium">Load CSV</label>
-          <input id="csv-file" type="file" accept=".csv" class="block text-sm"/>
-          <button id="reload-remote" class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
-            Reload from GitHub
-          </button>
-          <button id="export-csv" class="px-3 py-2 rounded-lg bg-gray-800 text-white text-sm font-semibold hover:bg-black">
-            Export table to CSV
-          </button>
+    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+      <div class="flex items-center gap-2">
+        <button id="prev-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">- Week</button>
+        <button id="today-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">Today</button>
+        <button id="next-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">+ Week</button>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+        <div class="flex gap-2">
+          <button id="bulk-upload-btn" class="bg-green-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-green-700 transition shadow-md w-full sm:w-auto">Bulk Upload</button>
+          <button id="add-member-btn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-blue-700 transition shadow-md w-full sm:w-auto">Add Team Member</button>
         </div>
-
-        <div class="flex flex-wrap items-center gap-3">
-          <label class="text-sm font-medium">Bulk edit (Mon–Fri):</label>
-          <select id="bulk-status" class="px-3 py-2 rounded-lg border text-sm">
-            <option value="">— choose status —</option>
-            <option value="WFO">WFO</option>
-            <option value="WFH">WFH</option>
-            <option value="Planned Leave">Planned Leave</option>
-            <option value="Unplanned Leave">Unplanned Leave</option>
-            <option value="(clear)">Clear value</option>
-          </select>
-          <button id="apply-bulk" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
-            Apply to selected rows (Mon–Fri)
-          </button>
+        <div class="flex gap-2">
+          <button id="export-csv-btn" class="bg-gray-900 text-white font-semibold py-2 px-6 rounded-lg hover:bg-black transition shadow-md w-full sm:w-auto">Export CSV</button>
+          <a id="download-template" class="bg-white border px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-50 transition w-full sm:w-auto text-center" download="bulk_template.csv">Template</a>
         </div>
       </div>
-      <p class="text-xs text-gray-500 mt-2">Tip: Use the checkbox column to select rows. “Select all” is in the header.</p>
-    </section>
-
-    <!-- Table -->
-    <div class="bg-white rounded-xl shadow p-2 overflow-x-auto">
-      <table class="w-full border-collapse" id="planner-table">
-        <thead class="bg-gray-100">
-          <tr>
-            <th class="p-2 border">
-              <label class="inline-flex items-center gap-2 text-sm">
-                <input type="checkbox" id="select-all" class="w-4 h-4">
-                Select
-              </label>
-            </th>
-            <th class="p-2 border">Name</th>
-            <th class="p-2 border">Role</th>
-            <th class="p-2 border">Shift</th>
-            <th class="p-2 border">Region</th>
-            <th class="p-2 border">Mon</th>
-            <th class="p-2 border">Tue</th>
-            <th class="p-2 border">Wed</th>
-            <th class="p-2 border">Thu</th>
-            <th class="p-2 border">Fri</th>
-            <th class="p-2 border">Sat</th>
-            <th class="p-2 border">Sun</th>
-          </tr>
-        </thead>
-        <tbody id="planner-body"></tbody>
-      </table>
     </div>
 
-    <!-- Legend -->
-    <div class="mt-6">
-      <h2 class="text-xl font-semibold mb-2">Legend</h2>
-      <div class="flex gap-3 flex-wrap">
-        <span class="status-cell status-wfo">WFO</span>
-        <span class="status-cell status-wfh">WFH</span>
-        <span class="status-cell status-planned-leave">Planned Leave</span>
-        <span class="status-cell status-unplanned-leave">Unplanned Leave</span>
-        <span class="status-cell status-default">No Data</span>
+    <!-- Planner Grid -->
+    <div class="bg-white rounded-xl shadow-lg p-4 overflow-hidden">
+      <div id="planner-grid-container" class="table-container overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead id="planner-head"></thead>
+          <tbody id="planner-body"></tbody>
+        </table>
+      </div>
+      <div id="empty-state" class="hidden text-center py-16">
+        <h3 class="text-xl font-semibold text-gray-700">Your planner is empty</h3>
+        <p class="text-gray-500 mt-2">Click "Add Team Member" or use <b>Bulk Upload</b> to get started.</p>
+      </div>
+    </div>
+
+    <!-- Toast / Info -->
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden"></div>
+  </div>
+
+  <!-- Add/Edit Member Modal -->
+  <div id="member-modal" class="modal-backdrop fixed inset-0 flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md mx-auto">
+      <h2 id="member-modal-title" class="text-2xl font-bold mb-6">Add New Member</h2>
+      <form id="member-form">
+        <input type="hidden" id="member-id">
+        <div class="mb-4">
+          <label for="member-name" class="block text-sm font-medium text-gray-700">Employee Name</label>
+          <input type="text" id="member-name" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500" required>
+        </div>
+        <div class="mb-4">
+          <label for="member-role" class="block text-sm font-medium text-gray-700">Role</label>
+          <input type="text" id="member-role" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500" required>
+        </div>
+        <div class="mb-4">
+          <label for="member-shift" class="block text-sm font-medium text-gray-700">Shift Timings</label>
+          <input type="text" id="member-shift" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500" required>
+        </div>
+        <div class="mb-6">
+          <label for="member-region" class="block text-sm font-medium text-gray-700">Region Supported</label>
+          <input type="text" id="member-region" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        <div class="flex justify-end gap-4">
+          <button type="button" id="cancel-member-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Cancel</button>
+          <button type="submit" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700">Save Member</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Set Status Modal -->
+  <div id="status-modal" class="modal-backdrop fixed inset-0 flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-sm mx-auto">
+      <h2 class="text-2xl font-bold mb-2">Set Status</h2>
+      <p id="status-modal-info" class="text-gray-600 mb-6"></p>
+      <div class="grid grid-cols-1 gap-4 mb-6">
+        <button data-status="wfo" class="status-btn status-wfo font-bold py-3 px-4 rounded-lg">Work from Office</button>
+        <button data-status="wfh" class="status-btn status-wfh font-bold py-3 px-4 rounded-lg">Work from Home</button>
+        <button data-status="planned-leave" class="status-btn status-planned-leave font-bold py-3 px-4 rounded-lg">Planned Leave</button>
+        <button data-status="unplanned-leave" class="status-btn status-unplanned-leave font-bold py-3 px-4 rounded-lg">Unplanned Leave</button>
+      </div>
+      <div class="mb-4">
+        <label for="status-comment" class="block text-sm font-medium text-gray-700">Comment (optional)</label>
+        <input type="text" id="status-comment" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500">
+      </div>
+      <div class="flex justify-between items-center gap-4">
+        <button type="button" id="clear-status-btn" class="text-red-600 font-semibold hover:text-red-800">Clear Status</button>
+        <div>
+          <button type="button" id="cancel-status-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 mr-2">Cancel</button>
+          <button type="button" id="save-status-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Upload Modal -->
+  <div id="bulk-upload-modal" class="modal-backdrop fixed inset-0 flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-2xl mx-auto">
+      <h2 class="text-2xl font-bold mb-4">Bulk Upload Members</h2>
+      <p class="text-gray-600 mb-4">CSV must include a header row. Supported columns:</p>
+      <div class="bg-gray-50 border rounded p-3 text-sm mb-4">
+        <div class="font-semibold mb-1">Required (first 4 columns in any order):</div>
+        <code class="bg-white border px-2 py-1 rounded inline-block">Name, Role, Shift Timings, Region Supported</code>
+        <div class="font-semibold mt-3 mb-1">Optional (set statuses for the <u>currently shown week</u>):</div>
+        <code class="bg-white border px-2 py-1 rounded inline-block">Mon, Tue, Wed, Thu, Fri, Sat, Sun</code>
+        <div class="mt-2">Allowed values: <b>WFO</b>, <b>WFH</b>, <b>Planned Leave</b>, <b>Unplanned Leave</b> (case-insensitive). Empty = no status.</div>
+      </div>
+      <div class="mb-4">
+        <label for="csv-file-input" class="block text-sm font-medium text-gray-700">CSV File</label>
+        <input type="file" id="csv-file-input" accept=".csv" class="mt-1 block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+      </div>
+      <p id="upload-status" class="text-sm h-5 mb-2"></p>
+      <div class="flex justify-end gap-3">
+        <button type="button" id="cancel-upload-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Status Update Modal -->
+  <div id="bulk-status-modal" class="modal-backdrop fixed inset-0 flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-sm mx-auto">
+      <h2 class="text-2xl font-bold mb-2">Bulk Update Week</h2>
+      <p id="bulk-status-modal-info" class="text-gray-600 mb-6"></p>
+      <div class="grid grid-cols-1 gap-4 mb-6">
+        <button data-status="wfo" class="bulk-status-btn status-wfo font-bold py-3 px-4 rounded-lg">Work from Office</button>
+        <button data-status="wfh" class="bulk-status-btn status-wfh font-bold py-3 px-4 rounded-lg">Work from Home</button>
+        <button data-status="planned-leave" class="bulk-status-btn status-planned-leave font-bold py-3 px-4 rounded-lg">Planned Leave</button>
+        <button data-status="unplanned-leave" class="bulk-status-btn status-unplanned-leave font-bold py-3 px-4 rounded-lg">Unplanned Leave</button>
+      </div>
+      <div class="flex justify-end gap-4">
+        <button type="button" id="cancel-bulk-status-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Cancel</button>
       </div>
     </div>
   </div>
 
   <script>
-    const REMOTE_CSV = "https://subbu8715.github.io/Weekly-resource-planner/Resourcetracker.csv";
-    const DAYS_ALL = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-    const WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri"];
-    let tableData = [];   // current rows as objects (headered)
-    let headersOrder = ["Name","Role","Shift Timings","Region Supported", ...DAYS_ALL];
+    document.addEventListener('DOMContentLoaded', () => {
+      // ===== STATE =====
+      let currentDate = new Date();
+      let teamMembers = JSON.parse(localStorage.getItem('teamMembers')) || [];
+      let statuses = JSON.parse(localStorage.getItem('statuses')) || {};
 
-    function getStatusClass(status) {
-      if (!status) return "status-default";
-      switch (String(status).trim().toLowerCase()) {
-        case "wfo": return "status-wfo";
-        case "wfh": return "status-wfh";
-        case "planned leave": return "status-planned-leave";
-        case "unplanned leave": return "status-unplanned-leave";
-        default: return "status-default";
-      }
-    }
+      // ===== DOM =====
+      const weekRangeDisplay = document.getElementById('week-range-display');
+      const plannerHead = document.getElementById('planner-head');
+      const plannerBody = document.getElementById('planner-body');
+      const emptyState = document.getElementById('empty-state');
+      const gridContainer = document.getElementById('planner-grid-container');
+      const toast = document.getElementById('toast');
 
-    function renderTable() {
-      const tbody = document.getElementById("planner-body");
-      tbody.innerHTML = "";
+      // Modals / Inputs
+      const memberModal = document.getElementById('member-modal');
+      const memberForm = document.getElementById('member-form');
+      const memberModalTitle = document.getElementById('member-modal-title');
+      const statusModal = document.getElementById('status-modal');
+      const statusModalInfo = document.getElementById('status-modal-info');
+      const bulkUploadModal = document.getElementById('bulk-upload-modal');
+      const csvFileInput = document.getElementById('csv-file-input');
+      const uploadStatus = document.getElementById('upload-status');
+      const bulkStatusModal = document.getElementById('bulk-status-modal');
+      const bulkStatusModalInfo = document.getElementById('bulk-status-modal-info');
 
-      tableData.forEach((row, idx) => {
-        const tr = document.createElement("tr");
+      let selectedCellData = null;
+      let selectedMemberIdForBulkUpdate = null;
 
-        // Select checkbox
-        const selTd = document.createElement("td");
-        selTd.className = "p-2 border text-center";
-        selTd.innerHTML = `<input type="checkbox" class="row-select w-4 h-4" data-index="${idx}">`;
-        tr.appendChild(selTd);
+      // ===== DATE UTILS =====
+      const getWeek = (date) => {
+        const week = [];
+        const temp = new Date(date);
+        const day = temp.getDay(); // 0 Sun .. 6 Sat
+        const monday = new Date(temp);
+        const offset = day === 0 ? 6 : day - 1; // back to Monday
+        monday.setDate(temp.getDate() - offset);
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(monday);
+          d.setDate(monday.getDate() + i);
+          week.push(d);
+        }
+        return week;
+      };
+      const formatDate = (date, opts) => date.toLocaleString('en-US', opts);
+      const toISO = (date) => date.toISOString().split('T')[0];
 
-        // Fixed info columns
-        const fixedCols = [
-          ["Name", "font-semibold"],
-          ["Role", ""],
-          ["Shift Timings", ""],
-          ["Region Supported", ""],
-        ];
-        fixedCols.forEach(([key, extra]) => {
-          const td = document.createElement("td");
-          td.className = "p-2 border " + extra;
-          td.textContent = row[key] ?? "";
-          tr.appendChild(td);
+      // ===== STORAGE =====
+      const saveData = () => {
+        localStorage.setItem('teamMembers', JSON.stringify(teamMembers));
+        localStorage.setItem('statuses', JSON.stringify(statuses));
+      };
+
+      // ===== RENDER =====
+      const render = () => {
+        const week = getWeek(currentDate);
+        renderWeekHeader(week);
+        renderPlanner(week);
+        updateEmptyState();
+      };
+
+      const renderWeekHeader = (week) => {
+        const start = formatDate(week[0], { month: 'short', day: 'numeric' });
+        const end = formatDate(week[6], { month: 'short', day: 'numeric', year: 'numeric' });
+        weekRangeDisplay.textContent = `${start} - ${end}`;
+        plannerHead.innerHTML = '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<th class="sticky left-0 bg-white p-2 border-b-2 border-gray-200 z-20">Team Member</th>`;
+        week.forEach(d => {
+          const isToday = toISO(d) === toISO(new Date());
+          tr.innerHTML += `
+            <th class="p-2 border-b-2 border-gray-200 text-center font-semibold">
+              <div class="${isToday ? 'text-blue-600' : ''}">
+                <div>${formatDate(d, { weekday: 'short' })}</div>
+                <div class="text-2xl">${formatDate(d, { day: 'numeric' })}</div>
+              </div>
+            </th>`;
         });
+        plannerHead.appendChild(tr);
+      };
 
-        // Days
-        DAYS_ALL.forEach(day => {
-          const val = row[day];
-          const td = document.createElement("td");
-          td.className = "p-2 border";
-          td.innerHTML = `<div class="status-cell ${getStatusClass(val)}">${val ?? ""}</div>`;
-          tr.appendChild(td);
+      const renderPlanner = (week) => {
+        plannerBody.innerHTML = '';
+        teamMembers.forEach(member => {
+          const row = document.createElement('tr');
+          const regionHTML = member.region ? `<div class="text-xs text-gray-500">Region: ${member.region}</div>` : '';
+          row.innerHTML = `
+            <td class="sticky left-0 bg-white border-b border-gray-200 p-2 z-10 align-top">
+              <div class="font-bold text-gray-900">${member.name}</div>
+              <div class="text-sm text-gray-500">${member.role}</div>
+              <div class="text-xs text-gray-500 mt-1">Shift: ${member.shift}</div>
+              ${regionHTML}
+              <div class="mt-2 space-x-2">
+                <button class="bulk-edit-btn text-xs text-blue-500 hover:underline" data-id="${member.id}">Bulk Edit</button>
+                <button class="delete-member-btn text-xs text-red-500 hover:underline" data-id="${member.id}">Delete</button>
+              </div>
+            </td>`;
+
+          week.forEach(d => {
+            const ds = toISO(d);
+            const key = `${member.id}_${ds}`;
+            const s = statuses[key];
+            const klass = s ? `status-${s.status}` : 'status-default';
+            const commentIcon = s && s.comment ? `<span class="absolute bottom-1 right-1 text-xs">💬</span>` : '';
+            const td = document.createElement('td');
+            td.className = 'border-b border-gray-200 p-1';
+            td.innerHTML = `<div class="status-cell relative rounded-lg cursor-pointer flex items-center justify-center ${klass}" data-member-id="${member.id}" data-date="${ds}" title="${s?.comment || ''}">${commentIcon}</div>`;
+            row.appendChild(td);
+          });
+          plannerBody.appendChild(row);
         });
+      };
 
-        tbody.appendChild(tr);
+      const updateEmptyState = () => {
+        if (teamMembers.length === 0) { emptyState.classList.remove('hidden'); gridContainer.classList.add('hidden'); }
+        else { emptyState.classList.add('hidden'); gridContainer.classList.remove('hidden'); }
+      };
+
+      // ===== HELPERS =====
+      const showToast = (msg, tone='info') => {
+        toast.textContent = msg;
+        toast.classList.remove('hidden');
+        toast.classList.toggle('bg-red-600', tone==='error');
+        toast.classList.toggle('bg-green-600', tone==='success');
+        if (tone==='info') { toast.classList.add('bg-gray-900'); }
+        setTimeout(()=>{ toast.classList.add('hidden'); toast.classList.remove('bg-red-600','bg-green-600','bg-gray-900'); }, 2500);
+      };
+
+      const normalizeStatus = (raw) => {
+        if (!raw) return null;
+        const v = String(raw).trim().toLowerCase();
+        if (v === 'wfo' || v === 'work from office') return 'wfo';
+        if (v === 'wfh' || v === 'work from home') return 'wfh';
+        if (v === 'planned leave' || v === 'pl') return 'planned-leave';
+        if (v === 'unplanned leave' || v === 'upl') return 'unplanned-leave';
+        return null; // unknown -> ignore
+      };
+
+      const ensureMember = (name, role, shift, region) => {
+        const existing = teamMembers.find(m => m.name === name && m.role === role && m.shift === shift && m.region === region);
+        if (existing) return existing.id;
+        const id = `member-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+        teamMembers.push({ id, name, role, shift, region });
+        return id;
+      };
+
+      // ===== EVENTS: Week Nav =====
+      document.getElementById('prev-week-btn').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()-7); render(); });
+      document.getElementById('next-week-btn').addEventListener('click', () => { currentDate.setDate(currentDate.getDate()+7); render(); });
+      document.getElementById('today-btn').addEventListener('click', () => { currentDate = new Date(); render(); });
+
+      // ===== EVENTS: Member Modal =====
+      document.getElementById('add-member-btn').addEventListener('click', () => {
+        memberForm.reset();
+        document.getElementById('member-id').value = '';
+        memberModalTitle.textContent = 'Add New Member';
+        memberModal.classList.remove('hidden');
       });
-    }
-
-    function normalizeAndSetHeaders(data) {
-      // Ensure expected headers exist
-      const needed = new Set(["Name","Role","Shift Timings","Region Supported", ...DAYS_ALL]);
-      data.forEach(row => {
-        needed.forEach(h => { if (!(h in row)) row[h] = ""; });
+      document.getElementById('cancel-member-btn').addEventListener('click', () => memberModal.classList.add('hidden'));
+      memberForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = document.getElementById('member-id').value || `member-${Date.now()}`;
+        const name = document.getElementById('member-name').value.trim();
+        const role = document.getElementById('member-role').value.trim();
+        const shift = document.getElementById('member-shift').value.trim();
+        const region = document.getElementById('member-region').value.trim();
+        const i = teamMembers.findIndex(m => m.id === id);
+        if (i > -1) teamMembers[i] = { id, name, role, shift, region }; else teamMembers.push({ id, name, role, shift, region });
+        saveData(); render(); memberModal.classList.add('hidden');
       });
-      // fix order for export
-      headersOrder = Array.from(needed);
-      return data;
-    }
 
-    function loadFromUrl(url) {
-      Papa.parse(url, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          tableData = normalizeAndSetHeaders(results.data || []);
-          renderTable();
-        },
-        error: (err) => {
-          console.error("Error loading CSV:", err);
-          alert("Couldn't load the CSV from GitHub. If this is a new file, wait a minute for Pages to refresh or try the 'Load CSV' file picker.");
+      // ===== EVENTS: Cell Clicks / Delete / Per-member Bulk =====
+      plannerBody.addEventListener('click', (e) => {
+        const t = e.target;
+        if (t.closest('.status-cell')) {
+          const cell = t.closest('.status-cell');
+          selectedCellData = { memberId: cell.dataset.memberId, date: cell.dataset.date };
+          const member = teamMembers.find(m => m.id === selectedCellData.memberId);
+          const d = new Date(selectedCellData.date);
+          d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+          statusModalInfo.textContent = `For ${member.name} on ${formatDate(d, { weekday:'long', month:'long', day:'numeric' })}`;
+          const key = `${selectedCellData.memberId}_${selectedCellData.date}`;
+          document.getElementById('status-comment').value = statuses[key]?.comment || '';
+          statusModal.classList.remove('hidden');
+        }
+        if (t.classList.contains('delete-member-btn')) {
+          const memberId = t.dataset.id;
+          if (confirm('Delete this team member and all their statuses?')) {
+            teamMembers = teamMembers.filter(m => m.id !== memberId);
+            Object.keys(statuses).forEach(k => { if (k.startsWith(memberId+'_')) delete statuses[k]; });
+            saveData(); render();
+          }
+        }
+        if (t.classList.contains('bulk-edit-btn')) {
+          selectedMemberIdForBulkUpdate = t.dataset.id;
+          const member = teamMembers.find(m => m.id === selectedMemberIdForBulkUpdate);
+          bulkStatusModalInfo.textContent = `Set status for ${member.name} for Mon–Fri of this week.`;
+          bulkStatusModal.classList.remove('hidden');
         }
       });
-    }
 
-    function loadFromFile(file) {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          tableData = normalizeAndSetHeaders(results.data || []);
-          renderTable();
-        },
-        error: (err) => {
-          console.error("File parse error:", err);
-          alert("Couldn't read that CSV file.");
+      // ===== EVENTS: Single Status Modal =====
+      statusModal.addEventListener('click', (e) => {
+        if (e.target.classList.contains('status-btn')) {
+          const status = e.target.dataset.status;
+          const comment = document.getElementById('status-comment').value;
+          const key = `${selectedCellData.memberId}_${selectedCellData.date}`;
+          statuses[key] = { status, comment };
+          saveData(); render(); statusModal.classList.add('hidden');
         }
       });
-    }
+      document.getElementById('save-status-btn').addEventListener('click', () => {
+        const key = `${selectedCellData.memberId}_${selectedCellData.date}`;
+        const comment = document.getElementById('status-comment').value;
+        if (statuses[key]) { statuses[key].comment = comment; }
+        saveData(); render(); statusModal.classList.add('hidden');
+      });
+      document.getElementById('clear-status-btn').addEventListener('click', () => {
+        const key = `${selectedCellData.memberId}_${selectedCellData.date}`; delete statuses[key]; saveData(); render(); statusModal.classList.add('hidden');
+      });
+      document.getElementById('cancel-status-btn').addEventListener('click', () => statusModal.classList.add('hidden'));
 
-    function applyBulkWeekdays(statusValue) {
-      const checkboxes = Array.from(document.querySelectorAll(".row-select"));
-      const selectedIdx = checkboxes.filter(cb => cb.checked).map(cb => +cb.dataset.index);
-      if (selectedIdx.length === 0) {
-        alert("Select at least one row.");
-        return;
-      }
-
-      selectedIdx.forEach(i => {
-        WEEKDAYS.forEach(day => {
-          tableData[i][day] = (statusValue === "(clear)") ? "" : statusValue;
+      // ===== EVENTS: Per-member Bulk (Mon–Fri only) =====
+      bulkStatusModal.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('bulk-status-btn')) return;
+        const status = e.target.dataset.status;
+        const week = getWeek(currentDate);
+        week.forEach(d => {
+          const dow = d.getDay();
+          if (dow !== 0 && dow !== 6) { // Mon–Fri
+            const key = `${selectedMemberIdForBulkUpdate}_${toISO(d)}`;
+            statuses[key] = { status, comment: '' };
+          }
         });
+        saveData(); render(); bulkStatusModal.classList.add('hidden');
       });
+      document.getElementById('cancel-bulk-status-btn').addEventListener('click', () => bulkStatusModal.classList.add('hidden'));
 
-      renderTable();
-    }
-
-    function exportCurrentCsv() {
-      // Ensure consistent header order for export
-      const csv = Papa.unparse({
-        fields: headersOrder,
-        data: tableData.map(row => headersOrder.map(h => row[h] ?? "")),
+      // ===== BULK UPLOAD (Members + optional statuses for current week) =====
+      document.getElementById('bulk-upload-btn').addEventListener('click', () => {
+        csvFileInput.value = '';
+        uploadStatus.textContent = '';
+        uploadStatus.className = 'text-sm h-5 mb-2';
+        bulkUploadModal.classList.remove('hidden');
       });
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Resourcetracker.csv";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
+      document.getElementById('cancel-upload-btn').addEventListener('click', () => bulkUploadModal.classList.add('hidden'));
 
-    document.addEventListener("DOMContentLoaded", () => {
-      // Initial load from GitHub Pages
-      loadFromUrl(REMOTE_CSV);
-
-      // File input
-      document.getElementById("csv-file").addEventListener("change", (e) => {
+      const DAY_COLS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      csvFileInput.addEventListener('change', (e) => {
         const file = e.target.files?.[0];
-        if (file) loadFromFile(file);
+        if (!file) return;
+        uploadStatus.textContent = 'Parsing…';
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (res) => {
+            const fields = (res.meta && res.meta.fields) || [];
+            const lower = new Set(fields.map(f => f.trim().toLowerCase()));
+            // Validate basic columns
+            const required = ['name','role','shift timings','region supported'];
+            const hasRequired = required.every(r => lower.has(r));
+            if (!hasRequired) {
+              uploadStatus.textContent = 'Missing required headers. Use the Template.';
+              uploadStatus.className = 'text-sm h-5 mb-2 text-red-600';
+              return;
+            }
+            const week = getWeek(currentDate);
+            const byDow = {0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'};
+
+            let added = 0;
+            res.data.forEach((row, idx) => {
+              const name = row[fields.find(f=>f.trim().toLowerCase()==='name')]?.trim();
+              const role = row[fields.find(f=>f.trim().toLowerCase()==='role')]?.trim();
+              const shift = row[fields.find(f=>f.trim().toLowerCase()==='shift timings')]?.trim();
+              const region = row[fields.find(f=>f.trim().toLowerCase()==='region supported')]?.trim() || '';
+              if (!name || !role || !shift) return; // need minimum
+              const id = ensureMember(name, role, shift, region);
+              added++;
+
+              // Optional day statuses -> map to the currently displayed week
+              DAY_COLS.forEach((dayLabel) => {
+                if (!(dayLabel in row)) return;
+                const norm = normalizeStatus(row[dayLabel]);
+                if (!norm) return;
+                const dateForDay = week.find(d => byDow[d.getDay()] === dayLabel);
+                if (!dateForDay) return;
+                const key = `${id}_${toISO(dateForDay)}`;
+                statuses[key] = { status: norm, comment: '' };
+              });
+            });
+
+            saveData(); render();
+            uploadStatus.textContent = `${added} member(s) imported.`;
+            uploadStatus.className = 'text-sm h-5 mb-2 text-green-700';
+            showToast('Bulk upload complete', 'success');
+          },
+          error: (err) => {
+            uploadStatus.textContent = `Error: ${err.message}`;
+            uploadStatus.className = 'text-sm h-5 mb-2 text-red-600';
+          }
+        });
       });
 
-      // Reload remote
-      document.getElementById("reload-remote").addEventListener("click", () => {
-        loadFromUrl(REMOTE_CSV);
+      // ===== EXPORT CSV =====
+      document.getElementById('export-csv-btn').addEventListener('click', () => {
+        // Build export with members + visible week statuses
+        const week = getWeek(currentDate);
+        const header = ['Name','Role','Shift Timings','Region Supported','Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+        const byDow = {0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'};
+        const data = teamMembers.map(m => {
+          const row = { 'Name': m.name, 'Role': m.role, 'Shift Timings': m.shift, 'Region Supported': m.region };
+          DAY_COLS.forEach(dlbl => row[dlbl] = '');
+          week.forEach(d => {
+            const key = `${m.id}_${toISO(d)}`;
+            const s = statuses[key]?.status || '';
+            const label = byDow[d.getDay()];
+            row[label] = (s === 'wfo') ? 'WFO'
+                      : (s === 'wfh') ? 'WFH'
+                      : (s === 'planned-leave') ? 'Planned Leave'
+                      : (s === 'unplanned-leave') ? 'Unplanned Leave' : '';
+          });
+          return header.map(h => row[h] ?? '');
+        });
+        const csv = Papa.unparse({ fields: header, data });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'Resourcetracker.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Exported current week to CSV', 'success');
       });
 
-      // Export
-      document.getElementById("export-csv").addEventListener("click", exportCurrentCsv);
+      // ===== TEMPLATE DOWNLOAD =====
+      const templateCsv = `Name,Role,Shift Timings,Region Supported,Mon,Tue,Wed,Thu,Fri,Sat,Sun\nJane Doe,Designer,9 AM - 5 PM,APAC,WFO,WFH,,,Planned Leave,,\n`;
+      const tplBlob = new Blob([templateCsv], { type: 'text/csv;charset=utf-8;' });
+      document.getElementById('download-template').href = URL.createObjectURL(tplBlob);
 
-      // Bulk apply
-      document.getElementById("apply-bulk").addEventListener("click", () => {
-        const val = document.getElementById("bulk-status").value;
-        if (!val) return alert("Choose a status first.");
-        applyBulkWeekdays(val);
-      });
-
-      // Select all
-      const selectAll = document.getElementById("select-all");
-      selectAll.addEventListener("change", (e) => {
-        const checked = e.target.checked;
-        document.querySelectorAll(".row-select").forEach(cb => { cb.checked = checked; });
-      });
+      // ===== INITIAL =====
+      render();
     });
   </script>
 </body>
 </html>
-
