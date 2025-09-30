@@ -1,37 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Resource Availability Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.5.0/papaparse.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', sans-serif; }
-    .status-cell {
-      min-width: 90px; height: 55px; 
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 0.5rem; font-weight: 600;
-    }
-    .status-wfo { background-color: #166534; color: white; } /* Dark Green */
-    .status-wfh { background-color: #86efac; color: #14532d; } /* Light Green */
-    .status-planned-leave { background-color: #f97316; color: white; } /* Orange */
-    .status-unplanned-leave { background-color: #b91c1c; color: white; } /* Dark Red */
-    .status-default { background-color: #f3f4f6; color: #374151; } /* Gray */
+    .status-cell { min-width: 90px; height: 48px; display:flex; align-items:center; justify-content:center; border-radius:0.5rem; font-weight:600; }
+    .status-wfo { background-color:#166534; color:#fff; }
+    .status-wfh { background-color:#86efac; color:#14532d; }
+    .status-planned-leave { background-color:#f97316; color:#fff; }
+    .status-unplanned-leave { background-color:#b91c1c; color:#fff; }
+    .status-default { background-color:#f3f4f6; color:#374151; }
+    th, td { white-space: nowrap; }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-800 antialiased">
 
-  <div class="container mx-auto p-6">
-    <header class="text-center mb-6">
-      <h1 class="text-4xl font-bold text-gray-900">Resource Availability Tracker</h1>
+  <div class="container mx-auto p-4 md:p-6">
+    <header class="mb-4 md:mb-6">
+      <h1 class="text-2xl md:text-4xl font-bold text-gray-900">Resource Availability Tracker</h1>
+      <p class="text-sm text-gray-500 mt-1">Week format: Monday → Sunday. Bulk edits affect <b>Mon–Fri only</b>.</p>
     </header>
 
-    <div class="bg-white rounded-xl shadow-lg p-4 overflow-x-auto">
-      <table class="w-full border-collapse">
+    <!-- Controls -->
+    <section class="bg-white rounded-xl shadow p-4 mb-4">
+      <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="text-sm font-medium">Load CSV</label>
+          <input id="csv-file" type="file" accept=".csv" class="block text-sm"/>
+          <button id="reload-remote" class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+            Reload from GitHub
+          </button>
+          <button id="export-csv" class="px-3 py-2 rounded-lg bg-gray-800 text-white text-sm font-semibold hover:bg-black">
+            Export table to CSV
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="text-sm font-medium">Bulk edit (Mon–Fri):</label>
+          <select id="bulk-status" class="px-3 py-2 rounded-lg border text-sm">
+            <option value="">— choose status —</option>
+            <option value="WFO">WFO</option>
+            <option value="WFH">WFH</option>
+            <option value="Planned Leave">Planned Leave</option>
+            <option value="Unplanned Leave">Unplanned Leave</option>
+            <option value="(clear)">Clear value</option>
+          </select>
+          <button id="apply-bulk" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
+            Apply to selected rows (Mon–Fri)
+          </button>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">Tip: Use the checkbox column to select rows. “Select all” is in the header.</p>
+    </section>
+
+    <!-- Table -->
+    <div class="bg-white rounded-xl shadow p-2 overflow-x-auto">
+      <table class="w-full border-collapse" id="planner-table">
         <thead class="bg-gray-100">
           <tr>
+            <th class="p-2 border">
+              <label class="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox" id="select-all" class="w-4 h-4">
+                Select
+              </label>
+            </th>
             <th class="p-2 border">Name</th>
             <th class="p-2 border">Role</th>
             <th class="p-2 border">Shift</th>
@@ -52,7 +89,7 @@
     <!-- Legend -->
     <div class="mt-6">
       <h2 class="text-xl font-semibold mb-2">Legend</h2>
-      <div class="flex gap-4 flex-wrap">
+      <div class="flex gap-3 flex-wrap">
         <span class="status-cell status-wfo">WFO</span>
         <span class="status-cell status-wfh">WFH</span>
         <span class="status-cell status-planned-leave">Planned Leave</span>
@@ -63,9 +100,15 @@
   </div>
 
   <script>
+    const REMOTE_CSV = "https://subbu8715.github.io/Weekly-resource-planner/Resourcetracker.csv";
+    const DAYS_ALL = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    const WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri"];
+    let tableData = [];   // current rows as objects (headered)
+    let headersOrder = ["Name","Role","Shift Timings","Region Supported", ...DAYS_ALL];
+
     function getStatusClass(status) {
       if (!status) return "status-default";
-      switch (status.trim().toLowerCase()) {
+      switch (String(status).trim().toLowerCase()) {
         case "wfo": return "status-wfo";
         case "wfh": return "status-wfh";
         case "planned leave": return "status-planned-leave";
@@ -74,48 +117,155 @@
       }
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
-      Papa.parse("https://subbu8715.github.io/Weekly-resource-planner/Resourcetracker.csv", {
+    function renderTable() {
+      const tbody = document.getElementById("planner-body");
+      tbody.innerHTML = "";
+
+      tableData.forEach((row, idx) => {
+        const tr = document.createElement("tr");
+
+        // Select checkbox
+        const selTd = document.createElement("td");
+        selTd.className = "p-2 border text-center";
+        selTd.innerHTML = `<input type="checkbox" class="row-select w-4 h-4" data-index="${idx}">`;
+        tr.appendChild(selTd);
+
+        // Fixed info columns
+        const fixedCols = [
+          ["Name", "font-semibold"],
+          ["Role", ""],
+          ["Shift Timings", ""],
+          ["Region Supported", ""],
+        ];
+        fixedCols.forEach(([key, extra]) => {
+          const td = document.createElement("td");
+          td.className = "p-2 border " + extra;
+          td.textContent = row[key] ?? "";
+          tr.appendChild(td);
+        });
+
+        // Days
+        DAYS_ALL.forEach(day => {
+          const val = row[day];
+          const td = document.createElement("td");
+          td.className = "p-2 border";
+          td.innerHTML = `<div class="status-cell ${getStatusClass(val)}">${val ?? ""}</div>`;
+          tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function normalizeAndSetHeaders(data) {
+      // Ensure expected headers exist
+      const needed = new Set(["Name","Role","Shift Timings","Region Supported", ...DAYS_ALL]);
+      data.forEach(row => {
+        needed.forEach(h => { if (!(h in row)) row[h] = ""; });
+      });
+      // fix order for export
+      headersOrder = Array.from(needed);
+      return data;
+    }
+
+    function loadFromUrl(url) {
+      Papa.parse(url, {
         download: true,
         header: true,
         skipEmptyLines: true,
-        complete: function(results) {
-          console.log("CSV parsed:", results.data);
-          const tbody = document.getElementById("planner-body");
-          tbody.innerHTML = "";
-
-          results.data.forEach(row => {
-            const tr = document.createElement("tr");
-
-            tr.innerHTML = `
-              <td class="p-2 border font-bold">${row["Name"] || ""}</td>
-              <td class="p-2 border">${row["Role"] || ""}</td>
-              <td class="p-2 border">${row["Shift Timings"] || ""}</td>
-              <td class="p-2 border">${row["Region Supported"] || ""}</td>
-            `;
-
-            ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(day => {
-              const status = row[day];
-              const td = document.createElement("td");
-              td.className = "p-2 border";
-              td.innerHTML = `<div class="status-cell ${getStatusClass(status)}">${status || ""}</div>`;
-              tr.appendChild(td);
-            });
-
-            tbody.appendChild(tr);
-          });
+        complete: (results) => {
+          tableData = normalizeAndSetHeaders(results.data || []);
+          renderTable();
         },
-        error: function(err) {
+        error: (err) => {
           console.error("Error loading CSV:", err);
+          alert("Couldn't load the CSV from GitHub. If this is a new file, wait a minute for Pages to refresh or try the 'Load CSV' file picker.");
         }
       });
-    });
+    }
 
-    // Placeholder for bulk-edit (future expansion)
-    // Bulk edit logic should only apply Mon–Fri:
-    // ["Mon","Tue","Wed","Thu","Fri"]
+    function loadFromFile(file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          tableData = normalizeAndSetHeaders(results.data || []);
+          renderTable();
+        },
+        error: (err) => {
+          console.error("File parse error:", err);
+          alert("Couldn't read that CSV file.");
+        }
+      });
+    }
+
+    function applyBulkWeekdays(statusValue) {
+      const checkboxes = Array.from(document.querySelectorAll(".row-select"));
+      const selectedIdx = checkboxes.filter(cb => cb.checked).map(cb => +cb.dataset.index);
+      if (selectedIdx.length === 0) {
+        alert("Select at least one row.");
+        return;
+      }
+
+      selectedIdx.forEach(i => {
+        WEEKDAYS.forEach(day => {
+          tableData[i][day] = (statusValue === "(clear)") ? "" : statusValue;
+        });
+      });
+
+      renderTable();
+    }
+
+    function exportCurrentCsv() {
+      // Ensure consistent header order for export
+      const csv = Papa.unparse({
+        fields: headersOrder,
+        data: tableData.map(row => headersOrder.map(h => row[h] ?? "")),
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Resourcetracker.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      // Initial load from GitHub Pages
+      loadFromUrl(REMOTE_CSV);
+
+      // File input
+      document.getElementById("csv-file").addEventListener("change", (e) => {
+        const file = e.target.files?.[0];
+        if (file) loadFromFile(file);
+      });
+
+      // Reload remote
+      document.getElementById("reload-remote").addEventListener("click", () => {
+        loadFromUrl(REMOTE_CSV);
+      });
+
+      // Export
+      document.getElementById("export-csv").addEventListener("click", exportCurrentCsv);
+
+      // Bulk apply
+      document.getElementById("apply-bulk").addEventListener("click", () => {
+        const val = document.getElementById("bulk-status").value;
+        if (!val) return alert("Choose a status first.");
+        applyBulkWeekdays(val);
+      });
+
+      // Select all
+      const selectAll = document.getElementById("select-all");
+      selectAll.addEventListener("change", (e) => {
+        const checked = e.target.checked;
+        document.querySelectorAll(".row-select").forEach(cb => { cb.checked = checked; });
+      });
+    });
   </script>
 </body>
 </html>
-
 
