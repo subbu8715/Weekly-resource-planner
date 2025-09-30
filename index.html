@@ -541,6 +541,61 @@
         render();
     });
     </script>
+    <script>
+function parseCSV(text) {
+  return text
+    .trim()
+    .split("\n")
+    .map(line => line.split(","));
+}
+
+fetch("Resourcetracker.csv")
+  .then(response => response.text())
+  .then(data => {
+    console.log("CSV raw data:", data);  // 👈 see what CSV looks like
+    const rows = parseCSV(data);
+    console.log("Parsed rows:", rows);   // 👈 see parsed version
+
+    const headers = rows[0];
+    console.log("Headers:", headers);
+
+    const people = rows.slice(1);
+    console.log("People:", people);
+
+    const container = document.getElementById("planner");
+    container.innerHTML = "";
+
+    people.forEach(person => {
+      console.log("Person row:", person);  // 👈 see each row
+      const name = person[0];
+
+      const rowDiv = document.createElement("div");
+      rowDiv.className = "person-row";
+
+      const nameDiv = document.createElement("div");
+      nameDiv.textContent = name || "⚠️ No Name Found";
+      nameDiv.style.fontWeight = "bold";
+      nameDiv.style.marginRight = "10px";
+      rowDiv.appendChild(nameDiv);
+
+      for (let i = 1; i < person.length; i++) {
+        const status = person[i];
+        const cell = document.createElement("div");
+        cell.className = "day-cell";
+        cell.style.display = "inline-block";
+        cell.style.width = "60px";
+        cell.style.height = "30px";
+        cell.style.margin = "2px";
+        cell.style.backgroundColor = "#ddd";
+        if (status) cell.style.backgroundColor = "lightgreen"; // temp color
+        rowDiv.appendChild(cell);
+      }
+
+      container.appendChild(rowDiv);
+    });
+  });
+</script>
 </body>
 </html>
+
 
