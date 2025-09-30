@@ -161,6 +161,7 @@
   </div>
 
   <script>
+    const REMOTE_CSV = "https://subbu8715.github.io/Weekly-resource-planner/Resourcetracker.csv";
     document.addEventListener('DOMContentLoaded', () => {
       // ===== STATE =====
       let currentDate = new Date();
@@ -500,8 +501,55 @@
       document.getElementById('download-template').href = URL.createObjectURL(tplBlob);
 
       // ===== INITIAL =====
-      render();
+      // Auto-load CSV from GitHub on first visit (only if no local data yet)
+      if (teamMembers.length === 0) {
+        try {
+          Papa.parse(REMOTE_CSV, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: (res) => {
+              const fields = (res.meta && res.meta.fields) || [];
+              const lower = new Set(fields.map(f => (f||'').trim().toLowerCase()));
+              const required = ['name','role','shift timings','region supported'];
+              const hasRequired = required.every(r => lower.has(r));
+              if (!hasRequired) { render(); return; }
+
+              const week = getWeek(currentDate);
+              const byDow = {0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'};
+              const getVal = (row, key) => row[fields.find(f=> (f||'').trim().toLowerCase()===key)]?.toString().trim() || '';
+
+              let added = 0;
+              res.data.forEach(row => {
+                const name = getVal(row,'name');
+                const role = getVal(row,'role');
+                const shift = getVal(row,'shift timings');
+                const region = getVal(row,'region supported');
+                if (!name || !role || !shift) return;
+                const id = ensureMember(name, role, shift, region);
+                added++;
+                // map day labels to this visible week
+                ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(day => {
+                  if (!(day in row)) return;
+                  const norm = normalizeStatus(row[day]);
+                  if (!norm) return;
+                  const dateForDay = week.find(d => byDow[d.getDay()] === day);
+                  if (!dateForDay) return;
+                  const key = `${id}_${toISO(dateForDay)}`;
+                  statuses[key] = { status: norm, comment: '' };
+                });
+              });
+              if (added > 0) { saveData(); showToast('Loaded starter data from GitHub','success'); }
+              render();
+            },
+            error: () => { render(); }
+          });
+        } catch (_) { render(); }
+      } else {
+        render();
+      }
     });
   </script>
 </body>
 </html>
+
