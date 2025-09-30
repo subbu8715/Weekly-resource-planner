@@ -541,6 +541,67 @@
         render();
     });
     </script>
+    <script>
+// Utility: Parse CSV text into array
+function parseCSV(text) {
+  return text
+    .trim()
+    .split("\n")
+    .map(line => line.split(","));
+}
+
+// Utility: pick color based on status
+function getColor(status) {
+  switch (status.trim().toLowerCase()) {
+    case "office": return "#006400";   // dark green
+    case "home": return "#90EE90";     // light green
+    case "leave": return "#D3D3D3";    // grey
+    default: return "#ffffff";         // white
+  }
+}
+
+fetch("Resourcetracker.csv")
+  .then(response => response.text())
+  .then(data => {
+    const rows = parseCSV(data);
+
+    // Assuming first row is header: [Name, Mon, Tue, Wed, Thu, Fri, Sat]
+    const headers = rows[0];
+    const people = rows.slice(1);
+
+    const container = document.getElementById("planner");
+    container.innerHTML = ""; // clear old content
+
+    people.forEach(person => {
+      const name = person[0];
+      const rowDiv = document.createElement("div");
+      rowDiv.className = "person-row";
+
+      // Add name label
+      const nameDiv = document.createElement("div");
+      nameDiv.textContent = name;
+      nameDiv.style.fontWeight = "bold";
+      nameDiv.style.marginRight = "10px";
+      rowDiv.appendChild(nameDiv);
+
+      // Add colored cells for each day
+      for (let i = 1; i < person.length; i++) {
+        const status = person[i];
+        const cell = document.createElement("div");
+        cell.className = "day-cell";
+        cell.style.display = "inline-block";
+        cell.style.width = "60px";
+        cell.style.height = "30px";
+        cell.style.margin = "2px";
+        cell.style.backgroundColor = getColor(status);
+        rowDiv.appendChild(cell);
+      }
+
+      container.appendChild(rowDiv);
+    });
+  });
+</script>
 </body>
 </html>
+
 
