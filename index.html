@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resource Availability Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { font-family: Arial, sans-serif; }
-    .status-cell { min-width: 120px; height: 70px; transition: transform .2s; }
+    .status-cell { min-width: 100px; height: 70px; transition: transform .2s; }
     .status-cell:hover { transform: scale(1.05); cursor: pointer; }
     .status-wfo { background-color:#166534; color:white; }
     .status-wfh { background-color:#86efac; color:#14532d; }
@@ -49,6 +49,7 @@
         <button data-status="planned-leave" class="status-btn status-planned-leave py-2 rounded">Planned Leave</button>
         <button data-status="unplanned-leave" class="status-btn status-unplanned-leave py-2 rounded">Unplanned Leave</button>
       </div>
+      <input type="text" id="status-comment" placeholder="Comment (optional)" class="w-full border px-2 py-1 mb-4 rounded" />
       <div class="flex justify-end gap-2">
         <button id="close-modal" class="px-4 py-2 bg-gray-200 rounded">Cancel</button>
       </div>
@@ -56,7 +57,7 @@
   </div>
 
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbxD1Rdg_lkShj7G4_9qS0M6G7gn96eXlFz-oKVdplxxJJn7aIBSqqE0mfkrT2LEHEz3/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbwMFoATqk4NWtyC2uGPPlPDMhDPthUI1G0I83lhcJDdqQET3reSeuS9o8i6SUHeKvUX/exec";
 
     let currentDate = new Date();
     let members = [];
@@ -68,8 +69,8 @@
     const plannerBody = document.getElementById("planner-body");
     const statusModal = document.getElementById("status-modal");
     const statusModalInfo = document.getElementById("status-modal-info");
+    const statusComment = document.getElementById("status-comment");
 
-    // Helpers
     const getWeek = (date) => {
       const week = [];
       const temp = new Date(date);
@@ -86,10 +87,8 @@
     };
 
     const toISO = (date) => date.toISOString().split("T")[0];
-
     const formatDate = (date, opts) => date.toLocaleString("en-US", opts);
 
-    // Fetch from Sheets
     async function fetchData() {
       const res = await fetch(API_URL + "?action=getData");
       const data = await res.json();
@@ -98,78 +97,69 @@
       render();
     }
 
-    // Save to Sheets
-    async function saveStatus(member, dateISO, status) {
+    async function saveStatus(member, dateISO, status, comment) {
       await fetch(API_URL, {
         method: "POST",
         body: JSON.stringify({
           action: "setStatus",
           member,
           date: dateISO,
-          status
+          status,
+          comment
         })
       });
-      statuses[`${member}_${dateISO}`] = status;
+      statuses[`${member}_${dateISO}`] = { status, comment };
       render();
     }
 
-    // Render
     function render() {
       const week = getWeek(currentDate);
       const start = formatDate(week[0], { month: "short", day: "numeric" });
       const end = formatDate(week[6], { month: "short", day: "numeric", year: "numeric" });
       weekRangeDisplay.textContent = `${start} - ${end}`;
 
-      // Header
       plannerHead.innerHTML = "";
       const tr = document.createElement("tr");
       tr.innerHTML = `<th class="p-2 text-left">Team Member</th>`;
       week.forEach(d => {
-        tr.innerHTML += `
-          <th class="p-2 text-center">
-            ${formatDate(d, { weekday: "short" })}<br>
-            ${formatDate(d, { day: "numeric" })}
-          </th>`;
+        tr.innerHTML += `<th class="p-2 text-center">${formatDate(d,{weekday:"short"})}<br>${formatDate(d,{day:"numeric"})}</th>`;
       });
       plannerHead.appendChild(tr);
 
-      // Body
       plannerBody.innerHTML = "";
       members.forEach(m => {
         const row = document.createElement("tr");
-        row.innerHTML = `
-          <td class="p-2 border font-semibold">
-            ${m.name}<br>
-            <span class="text-sm text-gray-500">${m.role}</span><br>
-            <span class="text-xs text-gray-500">Shift: ${m.shift}</span><br>
-            <span class="text-xs text-gray-500">Region: ${m.region}</span>
-          </td>`;
+        row.innerHTML = `<td class="p-2 border font-semibold">${m.name}<br>
+          <span class="text-sm text-gray-500">${m.role}</span><br>
+          <span class="text-xs text-gray-500">Shift: ${m.shift}</span><br>
+          <span class="text-xs text-gray-500">Region: ${m.region}</span></td>`;
         week.forEach(d => {
           const dateISO = toISO(d);
           const key = `${m.name}_${dateISO}`;
           const s = statuses[key];
-          const klass = s ? `status-${s}` : "status-default";
+          const klass = s ? `status-${s.status}` : "status-default";
           const td = document.createElement("td");
           td.className = "border p-1";
-          td.innerHTML = `<div class="status-cell rounded ${klass}" data-member="${m.name}" data-date="${dateISO}"></div>`;
+          td.innerHTML = `<div class="status-cell rounded ${klass}" data-member="${m.name}" data-date="${dateISO}" title="${s?.comment || ""}"></div>`;
           row.appendChild(td);
         });
         plannerBody.appendChild(row);
       });
     }
 
-    // Events
-    document.getElementById("prev-week").onclick = () => { currentDate.setDate(currentDate.getDate() - 7); render(); };
-    document.getElementById("next-week").onclick = () => { currentDate.setDate(currentDate.getDate() + 7); render(); };
-    document.getElementById("today").onclick = () => { currentDate = new Date(); render(); };
+    document.getElementById("prev-week").onclick = () => { currentDate.setDate(currentDate.getDate()-7); render(); };
+    document.getElementById("next-week").onclick = () => { currentDate.setDate(currentDate.getDate()+7); render(); };
+    document.getElementById("today").onclick = () => { currentDate=new Date(); render(); };
 
-    plannerBody.addEventListener("click", (e) => {
+    plannerBody.addEventListener("click", e => {
       const cell = e.target.closest(".status-cell");
       if (!cell) return;
       selectedCell = cell;
       const member = cell.dataset.member;
       const date = cell.dataset.date;
+      const existing = statuses[`${member}_${date}`];
       statusModalInfo.textContent = `${member} - ${date}`;
+      statusComment.value = existing?.comment || "";
       statusModal.classList.remove("hidden");
       statusModal.classList.add("flex");
     });
@@ -179,7 +169,8 @@
         const status = btn.dataset.status;
         const member = selectedCell.dataset.member;
         const date = selectedCell.dataset.date;
-        saveStatus(member, date, status);
+        const comment = statusComment.value;
+        saveStatus(member, date, status, comment);
         statusModal.classList.add("hidden");
         statusModal.classList.remove("flex");
       });
@@ -190,7 +181,6 @@
       statusModal.classList.remove("flex");
     };
 
-    // Init
     fetchData();
   </script>
 </body>
