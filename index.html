@@ -5,183 +5,196 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resource Availability Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    body { font-family: Arial, sans-serif; }
-    .status-cell { min-width: 100px; height: 70px; transition: transform .2s; }
-    .status-cell:hover { transform: scale(1.05); cursor: pointer; }
-    .status-wfo { background-color:#166534; color:white; }
+    body { font-family: 'Inter', sans-serif; }
+    .status-cell { min-width: 120px; height: 80px; transition: transform .2s; }
+    .status-cell:hover { transform: scale(1.05); z-index: 10; }
+    .status-wfo { background-color:#166534; color:#fff; }
     .status-wfh { background-color:#86efac; color:#14532d; }
-    .status-planned-leave { background-color:#f97316; color:white; }
-    .status-unplanned-leave { background-color:#b91c1c; color:white; }
+    .status-planned-leave { background-color:#f97316; color:#fff; }
+    .status-unplanned-leave { background-color:#b91c1c; color:#fff; }
     .status-default { background-color:#f3f4f6; }
-    .modal-backdrop { background: rgba(0,0,0,0.5); }
+    .modal-backdrop { background-color: rgba(0,0,0,.5); transition: opacity .3s ease-in-out; }
+    .table-container::-webkit-scrollbar { display: none; }
+    .table-container { -ms-overflow-style:none; scrollbar-width:none; }
   </style>
 </head>
-<body class="bg-gray-100">
-  <div class="container mx-auto p-6">
-    <h1 class="text-3xl font-bold text-center mb-4">Resource Availability Tracker</h1>
-    <p id="week-range-display" class="text-center text-lg mb-6"></p>
+<body class="bg-gray-100 text-gray-800 antialiased">
+  <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+    <header class="text-center mb-6">
+      <h1 class="text-4xl font-bold text-gray-900">Resource Availability Tracker</h1>
+      <p id="week-range-display" class="text-xl text-gray-600 mt-2"></p>
+    </header>
 
     <!-- Controls -->
-    <div class="flex justify-center gap-4 mb-6">
-      <button id="prev-week" class="px-4 py-2 bg-gray-200 rounded">- Week</button>
-      <button id="today" class="px-4 py-2 bg-gray-200 rounded">Today</button>
-      <button id="next-week" class="px-4 py-2 bg-gray-200 rounded">+ Week</button>
-    </div>
-
-    <!-- Table -->
-    <div class="overflow-x-auto bg-white shadow rounded-lg p-4">
-      <table class="w-full border-collapse">
-        <thead id="planner-head"></thead>
-        <tbody id="planner-body"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Status Modal -->
-  <div id="status-modal" class="modal-backdrop fixed inset-0 hidden items-center justify-center">
-    <div class="bg-white rounded-lg shadow-lg p-6 w-96">
-      <h2 class="text-xl font-bold mb-4">Set Status</h2>
-      <p id="status-modal-info" class="mb-4 text-gray-600"></p>
-      <div class="grid gap-2 mb-4">
-        <button data-status="wfo" class="status-btn status-wfo py-2 rounded">Work From Office</button>
-        <button data-status="wfh" class="status-btn status-wfh py-2 rounded">Work From Home</button>
-        <button data-status="planned-leave" class="status-btn status-planned-leave py-2 rounded">Planned Leave</button>
-        <button data-status="unplanned-leave" class="status-btn status-unplanned-leave py-2 rounded">Unplanned Leave</button>
+    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+      <div class="flex items-center gap-2">
+        <button id="prev-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">- Week</button>
+        <button id="today-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">Today</button>
+        <button id="next-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">+ Week</button>
       </div>
-      <input type="text" id="status-comment" placeholder="Comment (optional)" class="w-full border px-2 py-1 mb-4 rounded" />
-      <div class="flex justify-end gap-2">
-        <button id="close-modal" class="px-4 py-2 bg-gray-200 rounded">Cancel</button>
+      <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+        <div class="flex gap-2">
+          <button id="bulk-upload-btn" class="bg-green-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-green-700 transition shadow-md w-full sm:w-auto">Bulk Upload</button>
+          <button id="add-member-btn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-blue-700 transition shadow-md w-full sm:w-auto">Add Team Member</button>
+        </div>
+        <div class="flex gap-2">
+          <button id="export-csv-btn" class="bg-gray-900 text-white font-semibold py-2 px-6 rounded-lg hover:bg-black transition shadow-md w-full sm:w-auto">Export CSV</button>
+          <a id="download-template" class="bg-white border px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-50 transition w-full sm:w-auto text-center" download="bulk_template.csv">Template</a>
+        </div>
       </div>
     </div>
+
+    <!-- Planner Grid -->
+    <div class="bg-white rounded-xl shadow-lg p-4 overflow-hidden">
+      <div id="planner-grid-container" class="table-container overflow-x-auto">
+        <table class="w-full border-collapse">
+          <thead id="planner-head"></thead>
+          <tbody id="planner-body"></tbody>
+        </table>
+      </div>
+      <div id="empty-state" class="hidden text-center py-16">
+        <h3 class="text-xl font-semibold text-gray-700">Your planner is empty</h3>
+        <p class="text-gray-500 mt-2">Click "Add Team Member" or use <b>Bulk Upload</b> to get started.</p>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden"></div>
   </div>
 
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbwMFoATqk4NWtyC2uGPPlPDMhDPthUI1G0I83lhcJDdqQET3reSeuS9o8i6SUHeKvUX/exec";
+    // ✅ Use your deployed Apps Script Web App URL
+    const API_URL = "https://script.google.com/macros/s/AKfycbwMFoATqk4NWtyC2uGPPlPDMhDPthUI1G0I83lhcJDdqQET3reSeuS9o8i6SUHeKvUX/exec?action=getData";
 
-    let currentDate = new Date();
-    let members = [];
-    let statuses = {};
-    let selectedCell = null;
+    document.addEventListener('DOMContentLoaded', () => {
+      let currentDate = new Date();
+      let teamMembers = JSON.parse(localStorage.getItem('teamMembers')) || [];
+      let statuses = JSON.parse(localStorage.getItem('statuses')) || {};
 
-    const weekRangeDisplay = document.getElementById("week-range-display");
-    const plannerHead = document.getElementById("planner-head");
-    const plannerBody = document.getElementById("planner-body");
-    const statusModal = document.getElementById("status-modal");
-    const statusModalInfo = document.getElementById("status-modal-info");
-    const statusComment = document.getElementById("status-comment");
+      const weekRangeDisplay = document.getElementById('week-range-display');
+      const plannerHead = document.getElementById('planner-head');
+      const plannerBody = document.getElementById('planner-body');
+      const emptyState = document.getElementById('empty-state');
+      const gridContainer = document.getElementById('planner-grid-container');
+      const toast = document.getElementById('toast');
 
-    const getWeek = (date) => {
-      const week = [];
-      const temp = new Date(date);
-      const day = temp.getDay();
-      const monday = new Date(temp);
-      const offset = day === 0 ? 6 : day - 1;
-      monday.setDate(temp.getDate() - offset);
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + i);
-        week.push(d);
-      }
-      return week;
-    };
+      const getWeek = (date) => {
+        const week = [];
+        const temp = new Date(date);
+        const day = temp.getDay();
+        const monday = new Date(temp);
+        const offset = day === 0 ? 6 : day - 1;
+        monday.setDate(temp.getDate() - offset);
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(monday);
+          d.setDate(monday.getDate() + i);
+          week.push(d);
+        }
+        return week;
+      };
+      const formatDate = (date, opts) => date.toLocaleString('en-US', opts);
+      const toISO = (date) => date.toISOString().split('T')[0];
 
-    const toISO = (date) => date.toISOString().split("T")[0];
-    const formatDate = (date, opts) => date.toLocaleString("en-US", opts);
+      const saveData = () => {
+        localStorage.setItem('teamMembers', JSON.stringify(teamMembers));
+        localStorage.setItem('statuses', JSON.stringify(statuses));
+      };
 
-    async function fetchData() {
-      const res = await fetch(API_URL + "?action=getData");
-      const data = await res.json();
-      members = data.members;
-      statuses = data.statuses;
-      render();
-    }
+      const render = () => {
+        const week = getWeek(currentDate);
+        renderWeekHeader(week);
+        renderPlanner(week);
+        updateEmptyState();
+      };
 
-    async function saveStatus(member, dateISO, status, comment) {
-      await fetch(API_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "setStatus",
-          member,
-          date: dateISO,
-          status,
-          comment
-        })
-      });
-      statuses[`${member}_${dateISO}`] = { status, comment };
-      render();
-    }
-
-    function render() {
-      const week = getWeek(currentDate);
-      const start = formatDate(week[0], { month: "short", day: "numeric" });
-      const end = formatDate(week[6], { month: "short", day: "numeric", year: "numeric" });
-      weekRangeDisplay.textContent = `${start} - ${end}`;
-
-      plannerHead.innerHTML = "";
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<th class="p-2 text-left">Team Member</th>`;
-      week.forEach(d => {
-        tr.innerHTML += `<th class="p-2 text-center">${formatDate(d,{weekday:"short"})}<br>${formatDate(d,{day:"numeric"})}</th>`;
-      });
-      plannerHead.appendChild(tr);
-
-      plannerBody.innerHTML = "";
-      members.forEach(m => {
-        const row = document.createElement("tr");
-        row.innerHTML = `<td class="p-2 border font-semibold">${m.name}<br>
-          <span class="text-sm text-gray-500">${m.role}</span><br>
-          <span class="text-xs text-gray-500">Shift: ${m.shift}</span><br>
-          <span class="text-xs text-gray-500">Region: ${m.region}</span></td>`;
+      const renderWeekHeader = (week) => {
+        const start = formatDate(week[0], { month: 'short', day: 'numeric' });
+        const end = formatDate(week[6], { month: 'short', day: 'numeric', year: 'numeric' });
+        weekRangeDisplay.textContent = `${start} - ${end}`;
+        plannerHead.innerHTML = '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<th class="sticky left-0 bg-white p-2 border-b-2 border-gray-200 z-20">Team Member</th>`;
         week.forEach(d => {
-          const dateISO = toISO(d);
-          const key = `${m.name}_${dateISO}`;
-          const s = statuses[key];
-          const klass = s ? `status-${s.status}` : "status-default";
-          const td = document.createElement("td");
-          td.className = "border p-1";
-          td.innerHTML = `<div class="status-cell rounded ${klass}" data-member="${m.name}" data-date="${dateISO}" title="${s?.comment || ""}"></div>`;
-          row.appendChild(td);
+          const isToday = toISO(d) === toISO(new Date());
+          tr.innerHTML += `
+            <th class="p-2 border-b-2 border-gray-200 text-center font-semibold">
+              <div class="${isToday ? 'text-blue-600' : ''}">
+                <div>${formatDate(d, { weekday: 'short' })}</div>
+                <div class="text-2xl">${formatDate(d, { day: 'numeric' })}</div>
+              </div>
+            </th>`;
         });
-        plannerBody.appendChild(row);
-      });
-    }
+        plannerHead.appendChild(tr);
+      };
 
-    document.getElementById("prev-week").onclick = () => { currentDate.setDate(currentDate.getDate()-7); render(); };
-    document.getElementById("next-week").onclick = () => { currentDate.setDate(currentDate.getDate()+7); render(); };
-    document.getElementById("today").onclick = () => { currentDate=new Date(); render(); };
+      const renderPlanner = (week) => {
+        plannerBody.innerHTML = '';
+        teamMembers.forEach(member => {
+          const row = document.createElement('tr');
+          const regionHTML = member.region ? `<div class="text-xs text-gray-500">Region: ${member.region}</div>` : '';
+          row.innerHTML = `
+            <td class="sticky left-0 bg-white border-b border-gray-200 p-2 z-10 align-top">
+              <div class="font-bold text-gray-900">${member.name}</div>
+              <div class="text-sm text-gray-500">${member.role}</div>
+              <div class="text-xs text-gray-500 mt-1">Shift: ${member.shift}</div>
+              ${regionHTML}
+            </td>`;
+          week.forEach(d => {
+            const ds = toISO(d);
+            const key = `${member.name}_${ds}`;
+            const s = statuses[key];
+            const klass = s ? `status-${s.status}` : 'status-default';
+            const td = document.createElement('td');
+            td.className = 'border-b border-gray-200 p-1';
+            td.innerHTML = `<div class="status-cell relative rounded-lg ${klass}" title="${s?.comment || ''}"></div>`;
+            row.appendChild(td);
+          });
+          plannerBody.appendChild(row);
+        });
+      };
 
-    plannerBody.addEventListener("click", e => {
-      const cell = e.target.closest(".status-cell");
-      if (!cell) return;
-      selectedCell = cell;
-      const member = cell.dataset.member;
-      const date = cell.dataset.date;
-      const existing = statuses[`${member}_${date}`];
-      statusModalInfo.textContent = `${member} - ${date}`;
-      statusComment.value = existing?.comment || "";
-      statusModal.classList.remove("hidden");
-      statusModal.classList.add("flex");
+      const updateEmptyState = () => {
+        if (teamMembers.length === 0) { emptyState.classList.remove('hidden'); gridContainer.classList.add('hidden'); }
+        else { emptyState.classList.add('hidden'); gridContainer.classList.remove('hidden'); }
+      };
+
+      const showToast = (msg, tone='info') => {
+        toast.textContent = msg;
+        toast.classList.remove('hidden');
+        toast.classList.toggle('bg-red-600', tone==='error');
+        toast.classList.toggle('bg-green-600', tone==='success');
+        if (tone==='info') { toast.classList.add('bg-gray-900'); }
+        setTimeout(()=>{ toast.classList.add('hidden'); toast.classList.remove('bg-red-600','bg-green-600','bg-gray-900'); }, 2500);
+      };
+
+      // ===== INITIAL LOAD from Google Sheets =====
+      if (teamMembers.length === 0) {
+        fetch(API_URL)
+          .then(res => res.json())
+          .then(data => {
+            if (!data || !data.members) { render(); return; }
+
+            teamMembers = data.members.map(m => ({
+              name: m.name,
+              role: m.role,
+              shift: m.shift,
+              region: m.region
+            }));
+
+            statuses = data.statuses || {};
+
+            saveData();
+            showToast('Loaded starter data from Google Sheets', 'success');
+            render();
+          })
+          .catch(() => render());
+      } else {
+        render();
+      }
     });
-
-    document.querySelectorAll(".status-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const status = btn.dataset.status;
-        const member = selectedCell.dataset.member;
-        const date = selectedCell.dataset.date;
-        const comment = statusComment.value;
-        saveStatus(member, date, status, comment);
-        statusModal.classList.add("hidden");
-        statusModal.classList.remove("flex");
-      });
-    });
-
-    document.getElementById("close-modal").onclick = () => {
-      statusModal.classList.add("hidden");
-      statusModal.classList.remove("flex");
-    };
-
-    fetchData();
   </script>
 </body>
 </html>
