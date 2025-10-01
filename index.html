@@ -5,98 +5,227 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resource Availability Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <style>
-    body { font-family: 'Inter', sans-serif; }
-    .status-cell { min-width: 120px; height: 80px; transition: transform .2s; }
+    body { font-family: sans-serif; }
+    .status-cell { min-width: 100px; height: 60px; transition: transform .2s; }
     .status-cell:hover { transform: scale(1.05); z-index: 10; }
     .status-wfo { background-color:#166534; color:#fff; }
     .status-wfh { background-color:#86efac; color:#14532d; }
     .status-planned-leave { background-color:#f97316; color:#fff; }
     .status-unplanned-leave { background-color:#b91c1c; color:#fff; }
     .status-default { background-color:#f3f4f6; }
-    .modal-backdrop { background-color: rgba(0,0,0,.5); transition: opacity .3s ease-in-out; }
-    .table-container::-webkit-scrollbar { display: none; }
-    .table-container { -ms-overflow-style:none; scrollbar-width:none; }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-800 antialiased">
-  <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-    <header class="text-center mb-6">
-      <h1 class="text-4xl font-bold text-gray-900">Resource Availability Tracker</h1>
-      <p id="week-range-display" class="text-xl text-gray-600 mt-2"></p>
-    </header>
+  <div class="container mx-auto p-4">
+    <h1 class="text-3xl font-bold mb-4">Resource Availability Tracker</h1>
+    <p id="week-range-display" class="mb-4 text-lg"></p>
 
     <!-- Controls -->
-    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-      <div class="flex items-center gap-2">
-        <button id="prev-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">- Week</button>
-        <button id="today-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">Today</button>
-        <button id="next-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">+ Week</button>
-      </div>
-      <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-        <div class="flex gap-2">
-          <button id="bulk-upload-btn" class="bg-green-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-green-700 transition shadow-md w-full sm:w-auto">Bulk Upload</button>
-          <button id="add-member-btn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-blue-700 transition shadow-md w-full sm:w-auto">Add Team Member</button>
-        </div>
-        <div class="flex gap-2">
-          <button id="export-csv-btn" class="bg-gray-900 text-white font-semibold py-2 px-6 rounded-lg hover:bg-black transition shadow-md w-full sm:w-auto">Export CSV</button>
-          <a id="download-template" class="bg-white border px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-50 transition w-full sm:w-auto text-center" download="bulk_template.csv">Template</a>
-        </div>
-      </div>
+    <div class="flex flex-wrap gap-3 mb-6">
+      <button id="prev-week-btn" class="bg-white px-4 py-2 rounded shadow">- Week</button>
+      <button id="today-btn" class="bg-white px-4 py-2 rounded shadow">Today</button>
+      <button id="next-week-btn" class="bg-white px-4 py-2 rounded shadow">+ Week</button>
+
+      <button id="export-csv-btn" class="bg-gray-900 text-white px-4 py-2 rounded shadow">Export Current Week</button>
+      <button id="export-all-csv-btn" class="bg-gray-700 text-white px-4 py-2 rounded shadow">Export All Statuses</button>
     </div>
 
-    <!-- Planner Grid -->
-    <div class="bg-white rounded-xl shadow-lg p-4 overflow-hidden">
-      <div id="planner-grid-container" class="table-container overflow-x-auto">
-        <table class="w-full border-collapse">
-          <thead id="planner-head"></thead>
-          <tbody id="planner-body"></tbody>
-        </table>
-      </div>
-      <div id="empty-state" class="hidden text-center py-16">
-        <h3 class="text-xl font-semibold text-gray-700">Your planner is empty</h3>
-        <p class="text-gray-500 mt-2">Click "Add Team Member" or use <b>Bulk Upload</b> to get started.</p>
-      </div>
+    <!-- Table -->
+    <div class="overflow-x-auto bg-white rounded-lg shadow">
+      <table class="w-full border-collapse">
+        <thead id="planner-head"></thead>
+        <tbody id="planner-body"></tbody>
+      </table>
     </div>
+  </div>
 
-    <!-- Toast / Info -->
-    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden"></div>
+  <!-- Status Modal -->
+  <div id="status-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+    <div class="bg-white p-6 rounded shadow-lg w-80">
+      <h2 class="text-xl font-bold mb-4">Set Status</h2>
+      <p id="status-modal-info" class="mb-3"></p>
+      <button data-status="wfo" class="block w-full mb-2 bg-green-700 text-white p-2 rounded">WFO</button>
+      <button data-status="wfh" class="block w-full mb-2 bg-green-200 text-black p-2 rounded">WFH</button>
+      <button data-status="planned-leave" class="block w-full mb-2 bg-orange-500 text-white p-2 rounded">Planned Leave</button>
+      <button data-status="unplanned-leave" class="block w-full mb-2 bg-red-600 text-white p-2 rounded">Unplanned Leave</button>
+      <button id="cancel-status-btn" class="mt-2 bg-gray-200 p-2 w-full rounded">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Bulk Edit Modal -->
+  <div id="bulk-status-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+    <div class="bg-white p-6 rounded shadow-lg w-80">
+      <h2 class="text-xl font-bold mb-4">Bulk Edit (Mon–Fri)</h2>
+      <p id="bulk-status-modal-info" class="mb-3"></p>
+      <button data-status="wfo" class="block w-full mb-2 bg-green-700 text-white p-2 rounded">WFO</button>
+      <button data-status="wfh" class="block w-full mb-2 bg-green-200 text-black p-2 rounded">WFH</button>
+      <button data-status="planned-leave" class="block w-full mb-2 bg-orange-500 text-white p-2 rounded">Planned Leave</button>
+      <button data-status="unplanned-leave" class="block w-full mb-2 bg-red-600 text-white p-2 rounded">Unplanned Leave</button>
+      <button id="cancel-bulk-status-btn" class="mt-2 bg-gray-200 p-2 w-full rounded">Cancel</button>
+    </div>
   </div>
 
   <script>
-    // ✅ Backend URL (Apps Script Web App)
-    const API_BASE = "https://script.google.com/macros/s/AKfycbyKziIiPKCEG8bjnEvYw2oFh0FehfLUCJcB6JKCqIypA-KwNsKCb2qnfAF7hbPKjjah/exec";
+    const API_BASE = "https://script.google.com/macros/s/AKfycbwVL-Efxp0Q1ol4vGkl4TCS1_XUA5w7yO8HjeJGetVFnzxvweaZreQjlSsnVt7NW-yL/exec";
 
-    // Example: Fetch data
-    async function loadData() {
-      try {
-        const res = await fetch(`${API_BASE}?action=getData`);
-        const data = await res.json();
-        console.log("Loaded data from backend:", data);
+    let currentDate = new Date();
+    let members = [];
+    let statuses = {};
+    let selectedCellData = null;
+    let selectedMemberForBulk = null;
 
-        // Render members
-        const plannerBody = document.getElementById("planner-body");
-        plannerBody.innerHTML = "";
-        data.members.forEach(m => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td class="border px-4 py-2">
-              <div class="font-bold">${m.name}</div>
-              <div class="text-sm text-gray-500">${m.role}</div>
-              <div class="text-xs text-gray-400">Shift: ${m.shift}</div>
-              <div class="text-xs text-gray-400">Region: ${m.region}</div>
-            </td>`;
-          plannerBody.appendChild(tr);
-        });
+    const weekRangeDisplay = document.getElementById("week-range-display");
+    const plannerHead = document.getElementById("planner-head");
+    const plannerBody = document.getElementById("planner-body");
 
-        // TODO: statuses can be rendered here
-      } catch (err) {
-        console.error("Error fetching data:", err);
+    function getWeek(date) {
+      const week = [];
+      const temp = new Date(date);
+      const day = temp.getDay();
+      const monday = new Date(temp);
+      const offset = day === 0 ? 6 : day - 1;
+      monday.setDate(temp.getDate() - offset);
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        week.push(d);
       }
+      return week;
+    }
+    const toISO = (d) => d.toISOString().split("T")[0];
+
+    async function loadData() {
+      const res = await fetch(`${API_BASE}?action=getData`);
+      const data = await res.json();
+      members = data.members;
+      statuses = data.statuses;
+      render();
     }
 
-    document.addEventListener("DOMContentLoaded", loadData);
+    function render() {
+      const week = getWeek(currentDate);
+      const start = week[0].toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const end = week[6].toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      weekRangeDisplay.textContent = `${start} - ${end}`;
+
+      plannerHead.innerHTML = "";
+      const headRow = document.createElement("tr");
+      headRow.innerHTML = `<th class="p-2 border bg-gray-100">Member</th>`;
+      week.forEach(d => {
+        headRow.innerHTML += `<th class="p-2 border bg-gray-100 text-center">${d.toLocaleDateString("en-US",{weekday:"short"})}<br>${d.getDate()}</th>`;
+      });
+      plannerHead.appendChild(headRow);
+
+      plannerBody.innerHTML = "";
+      members.forEach(m => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td class="p-2 border align-top">
+          <div class="font-bold">${m.name}</div>
+          <div class="text-sm text-gray-500">${m.role}</div>
+          <div class="text-xs text-gray-500">Shift: ${m.shift}</div>
+          <div class="text-xs text-gray-500">Region: ${m.region}</div>
+          <button class="bulk-edit-btn text-xs text-blue-500 hover:underline mt-1" data-id="${m.name}">Bulk Edit</button>
+        </td>`;
+
+        week.forEach(d => {
+          const key = `${m.name}_${toISO(d)}`;
+          const s = statuses[key];
+          const klass = s ? `status-${s.status}` : "status-default";
+          tr.innerHTML += `<td class="p-1 border text-center">
+            <div class="status-cell ${klass}" data-member="${m.name}" data-date="${toISO(d)}"></div>
+          </td>`;
+        });
+
+        plannerBody.appendChild(tr);
+      });
+    }
+
+    // Week nav
+    document.getElementById("prev-week-btn").addEventListener("click", ()=>{currentDate.setDate(currentDate.getDate()-7);render();});
+    document.getElementById("next-week-btn").addEventListener("click", ()=>{currentDate.setDate(currentDate.getDate()+7);render();});
+    document.getElementById("today-btn").addEventListener("click", ()=>{currentDate=new Date();render();});
+
+    // Cell click
+    plannerBody.addEventListener("click", (e) => {
+      if (e.target.closest(".status-cell")) {
+        const cell = e.target.closest(".status-cell");
+        selectedCellData = { member: cell.dataset.member, date: cell.dataset.date };
+        document.getElementById("status-modal-info").textContent = `${selectedCellData.member} on ${selectedCellData.date}`;
+        document.getElementById("status-modal").classList.remove("hidden");
+        document.getElementById("status-modal").classList.add("flex");
+      }
+      if (e.target.classList.contains("bulk-edit-btn")) {
+        selectedMemberForBulk = e.target.dataset.id;
+        document.getElementById("bulk-status-modal-info").textContent = `Apply status for ${selectedMemberForBulk} (Mon–Fri)`;
+        document.getElementById("bulk-status-modal").classList.remove("hidden");
+        document.getElementById("bulk-status-modal").classList.add("flex");
+      }
+    });
+
+    // Status modal
+    document.getElementById("status-modal").addEventListener("click", async (e) => {
+      if (e.target.dataset.status) {
+        const {member,date} = selectedCellData;
+        const status = e.target.dataset.status;
+        await fetch(API_BASE, {
+          method: "POST",
+          body: JSON.stringify({ action:"setStatus", member, date, status }),
+        });
+        statuses[`${member}_${date}`] = { status, comment:"" };
+        render();
+        document.getElementById("status-modal").classList.add("hidden");
+      }
+    });
+    document.getElementById("cancel-status-btn").addEventListener("click", ()=>document.getElementById("status-modal").classList.add("hidden"));
+
+    // Bulk modal
+    document.getElementById("bulk-status-modal").addEventListener("click", async (e) => {
+      if (!e.target.dataset.status) return;
+      const week = getWeek(currentDate);
+      const status = e.target.dataset.status;
+      for (let d of week) {
+        if (d.getDay()>=1 && d.getDay()<=5) {
+          const date = toISO(d);
+          await fetch(API_BASE, {
+            method: "POST",
+            body: JSON.stringify({ action:"setStatus", member:selectedMemberForBulk, date, status }),
+          });
+          statuses[`${selectedMemberForBulk}_${date}`] = { status, comment:"" };
+        }
+      }
+      render();
+      document.getElementById("bulk-status-modal").classList.add("hidden");
+    });
+    document.getElementById("cancel-bulk-status-btn").addEventListener("click", ()=>document.getElementById("bulk-status-modal").classList.add("hidden"));
+
+    // Export week
+    document.getElementById("export-csv-btn").addEventListener("click", () => {
+      const week = getWeek(currentDate);
+      const header = ["Name","Role","Shift","Region","Date","Status"];
+      const rows = [];
+      members.forEach(m => {
+        week.forEach(d => {
+          const key = `${m.name}_${toISO(d)}`;
+          const s = statuses[key]?.status || "";
+          rows.push([m.name,m.role,m.shift,m.region,toISO(d),s]);
+        });
+      });
+      const csv = Papa.unparse({ fields: header, data: rows });
+      const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href=url;a.download="Week_Statuses.csv";a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Export all
+    document.getElementById("export-all-csv-btn").addEventListener("click", () => {
+      window.open(API_BASE + "?action=exportCSV","_blank");
+    });
+
+    loadData();
   </script>
 </body>
 </html>
