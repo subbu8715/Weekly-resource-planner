@@ -2,21 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Resource Availability Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     body { font-family: 'Inter', sans-serif; }
     .status-cell { min-width: 120px; height: 80px; transition: transform .2s; }
-    .status-cell:hover { transform: scale(1.05); z-index: 10; }
+    .status-cell:hover { transform: scale(1.03); }
     .status-wfo { background-color:#166534; color:#fff; }
     .status-wfh { background-color:#86efac; color:#14532d; }
     .status-planned-leave { background-color:#f97316; color:#fff; }
     .status-unplanned-leave { background-color:#b91c1c; color:#fff; }
     .status-default { background-color:#f3f4f6; }
-    .modal-backdrop { background-color: rgba(0,0,0,.5); transition: opacity .3s ease-in-out; }
+    .modal-backdrop { background: rgba(0,0,0,.5); }
     .table-container::-webkit-scrollbar { display: none; }
     .table-container { -ms-overflow-style:none; scrollbar-width:none; }
   </style>
@@ -25,176 +24,326 @@
   <div class="container mx-auto p-4 sm:p-6 lg:p-8">
     <header class="text-center mb-6">
       <h1 class="text-4xl font-bold text-gray-900">Resource Availability Tracker</h1>
-      <p id="week-range-display" class="text-xl text-gray-600 mt-2"></p>
+      <p id="week-range" class="text-xl text-gray-600 mt-2"></p>
     </header>
 
-    <!-- Controls -->
-    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-      <div class="flex items-center gap-2">
-        <button id="prev-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">- Week</button>
-        <button id="today-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">Today</button>
-        <button id="next-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200 transition">+ Week</button>
-      </div>
-      <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-        <div class="flex gap-2">
-          <button id="bulk-upload-btn" class="bg-green-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-green-700 transition shadow-md w-full sm:w-auto">Bulk Upload</button>
-          <button id="add-member-btn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-blue-700 transition shadow-md w-full sm:w-auto">Add Team Member</button>
-        </div>
-        <div class="flex gap-2">
-          <button id="export-csv-btn" class="bg-gray-900 text-white font-semibold py-2 px-6 rounded-lg hover:bg-black transition shadow-md w-full sm:w-auto">Export CSV</button>
-          <a id="download-template" class="bg-white border px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-50 transition w-full sm:w-auto text-center" download="bulk_template.csv">Template</a>
-        </div>
-      </div>
+    <!-- Top Controls -->
+    <div class="flex flex-wrap items-center justify-center gap-3 mb-6">
+      <button id="prev-week" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">- Week</button>
+      <button id="today" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">Today</button>
+      <button id="next-week" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">+ Week</button>
     </div>
 
-    <!-- Planner Grid -->
+    <!-- Grid -->
     <div class="bg-white rounded-xl shadow-lg p-4 overflow-hidden">
-      <div id="planner-grid-container" class="table-container overflow-x-auto">
+      <div id="grid-wrap" class="table-container overflow-x-auto">
         <table class="w-full border-collapse">
-          <thead id="planner-head"></thead>
-          <tbody id="planner-body"></tbody>
+          <thead id="thead"></thead>
+          <tbody id="tbody"></tbody>
         </table>
       </div>
-      <div id="empty-state" class="hidden text-center py-16">
+      <div id="empty" class="hidden text-center py-16">
         <h3 class="text-xl font-semibold text-gray-700">Your planner is empty</h3>
-        <p class="text-gray-500 mt-2">Click "Add Team Member" or use <b>Bulk Upload</b> to get started.</p>
+        <p class="text-gray-500 mt-2">Add people to the <b>Members</b> tab in the Google Sheet.</p>
       </div>
     </div>
 
-    <!-- Toast -->
-    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden"></div>
+    <!-- Legend -->
+    <div class="mt-6">
+      <h2 class="text-lg font-semibold mb-2">Legend</h2>
+      <div class="flex flex-wrap gap-3">
+        <span class="px-3 py-2 rounded-lg status-wfo font-semibold">WFO</span>
+        <span class="px-3 py-2 rounded-lg status-wfh font-semibold">WFH</span>
+        <span class="px-3 py-2 rounded-lg status-planned-leave font-semibold">Planned Leave</span>
+        <span class="px-3 py-2 rounded-lg status-unplanned-leave font-semibold">Unplanned Leave</span>
+        <span class="px-3 py-2 rounded-lg status-default font-semibold">No Data</span>
+      </div>
+    </div>
   </div>
 
+  <!-- Status Modal -->
+  <div id="status-modal" class="modal-backdrop fixed inset-0 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-1">Set Status</h2>
+      <p id="status-info" class="text-gray-600 mb-4"></p>
+      <div class="grid grid-cols-1 gap-2 mb-4">
+        <button class="status-choice status-wfo py-2 rounded font-bold" data-status="wfo">Work from Office</button>
+        <button class="status-choice status-wfh py-2 rounded font-bold" data-status="wfh">Work from Home</button>
+        <button class="status-choice status-planned-leave py-2 rounded font-bold" data-status="planned-leave">Planned Leave</button>
+        <button class="status-choice status-unplanned-leave py-2 rounded font-bold" data-status="unplanned-leave">Unplanned Leave</button>
+      </div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Comment (optional)</label>
+      <input id="status-comment" class="w-full border rounded px-3 py-2 mb-4" placeholder="Optional note"/>
+      <div class="flex justify-between items-center">
+        <button id="clear-status" class="text-red-600 font-semibold hover:text-red-800">Clear Status</button>
+        <div class="space-x-2">
+          <button id="close-status" class="bg-gray-200 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
+          <button id="save-status" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Modal -->
+  <div id="bulk-modal" class="modal-backdrop fixed inset-0 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
+      <h2 class="text-2xl font-bold mb-1">Bulk Update (Mon–Fri)</h2>
+      <p id="bulk-info" class="text-gray-600 mb-4"></p>
+      <div class="grid grid-cols-1 gap-2 mb-2">
+        <button class="bulk-choice status-wfo py-2 rounded font-bold" data-status="wfo">Work from Office</button>
+        <button class="bulk-choice status-wfh py-2 rounded font-bold" data-status="wfh">Work from Home</button>
+        <button class="bulk-choice status-planned-leave py-2 rounded font-bold" data-status="planned-leave">Planned Leave</button>
+        <button class="bulk-choice status-unplanned-leave py-2 rounded font-bold" data-status="unplanned-leave">Unplanned Leave</button>
+      </div>
+      <div class="text-right">
+        <button id="close-bulk" class="bg-gray-200 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden"></div>
+
   <script>
-    // ✅ Use your deployed Apps Script Web App URL
-    const API_URL = "https://script.google.com/macros/s/AKfycbwMFoATqk4NWtyC2uGPPlPDMhDPthUI1G0I83lhcJDdqQET3reSeuS9o8i6SUHeKvUX/exec?action=getData";
+    // === Replace this with YOUR Apps Script Web App URL (the one ending with /exec)
+    const API_BASE = "PASTE_YOUR_WEB_APP_URL_HERE";
 
-    document.addEventListener('DOMContentLoaded', () => {
-      let currentDate = new Date();
-      let teamMembers = JSON.parse(localStorage.getItem('teamMembers')) || [];
-      let statuses = JSON.parse(localStorage.getItem('statuses')) || {};
+    // --- State ---
+    let currentDate = new Date();
+    let members = [];                       // [{name, role, shift, region}]
+    let statuses = {};                      // { "Name_YYYY-MM-DD": {status, comment} }
+    let selected = null;                    // { memberName, dateISO }
+    let bulkMemberName = null;
 
-      const weekRangeDisplay = document.getElementById('week-range-display');
-      const plannerHead = document.getElementById('planner-head');
-      const plannerBody = document.getElementById('planner-body');
-      const emptyState = document.getElementById('empty-state');
-      const gridContainer = document.getElementById('planner-grid-container');
-      const toast = document.getElementById('toast');
+    // --- DOM ---
+    const weekRangeEl = document.getElementById('week-range');
+    const thead = document.getElementById('thead');
+    const tbody = document.getElementById('tbody');
+    const empty = document.getElementById('empty');
+    const gridWrap = document.getElementById('grid-wrap');
+    const toast = document.getElementById('toast');
 
-      const getWeek = (date) => {
-        const week = [];
-        const temp = new Date(date);
-        const day = temp.getDay();
-        const monday = new Date(temp);
-        const offset = day === 0 ? 6 : day - 1;
-        monday.setDate(temp.getDate() - offset);
-        for (let i = 0; i < 7; i++) {
-          const d = new Date(monday);
-          d.setDate(monday.getDate() + i);
-          week.push(d);
-        }
-        return week;
-      };
-      const formatDate = (date, opts) => date.toLocaleString('en-US', opts);
-      const toISO = (date) => date.toISOString().split('T')[0];
+    // Modals
+    const statusModal = document.getElementById('status-modal');
+    const statusInfo = document.getElementById('status-info');
+    const statusComment = document.getElementById('status-comment');
+    const saveStatusBtn = document.getElementById('save-status');
+    const clearStatusBtn = document.getElementById('clear-status');
+    const closeStatusBtn = document.getElementById('close-status');
 
-      const saveData = () => {
-        localStorage.setItem('teamMembers', JSON.stringify(teamMembers));
-        localStorage.setItem('statuses', JSON.stringify(statuses));
-      };
+    const bulkModal = document.getElementById('bulk-modal');
+    const bulkInfo = document.getElementById('bulk-info');
+    const closeBulkBtn = document.getElementById('close-bulk');
 
-      const render = () => {
-        const week = getWeek(currentDate);
-        renderWeekHeader(week);
-        renderPlanner(week);
-        updateEmptyState();
-      };
+    // --- Helpers ---
+    const toISO = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().split('T')[0];
+    const fmt = (d, opts) => d.toLocaleString('en-US', opts);
+    function getWeek(date){
+      const out = [];
+      const t = new Date(date);
+      const dow = t.getDay();                       // 0..6 (Sun..Sat)
+      const mon = new Date(t);
+      const offset = (dow === 0) ? 6 : (dow - 1);   // back to Monday
+      mon.setDate(t.getDate() - offset);
+      for (let i=0;i<7;i++){
+        const d = new Date(mon); d.setDate(mon.getDate()+i); out.push(d);
+      }
+      return out;
+    }
 
-      const renderWeekHeader = (week) => {
-        const start = formatDate(week[0], { month: 'short', day: 'numeric' });
-        const end = formatDate(week[6], { month: 'short', day: 'numeric', year: 'numeric' });
-        weekRangeDisplay.textContent = `${start} - ${end}`;
-        plannerHead.innerHTML = '';
+    function showToast(msg, tone='info'){
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      toast.classList.toggle('bg-green-600', tone==='success');
+      toast.classList.toggle('bg-red-600', tone==='error');
+      if (tone==='info') { toast.classList.add('bg-gray-900'); }
+      setTimeout(()=>{ toast.classList.add('hidden'); toast.classList.remove('bg-green-600','bg-red-600','bg-gray-900'); }, 2200);
+    }
+
+    // --- API ---
+    async function apiGetData(){
+      const res = await fetch(`${API_BASE}?action=getData`);
+      if (!res.ok) throw new Error('Failed to fetch data');
+      return res.json();
+    }
+    async function apiSetStatus(memberName, dateISO, status, comment){
+      await fetch(API_BASE, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'setStatus',
+          member: memberName,
+          date: dateISO,
+          status,
+          comment: comment || ''
+        })
+      });
+    }
+
+    // --- Render ---
+    function render(){
+      const week = getWeek(currentDate);
+      weekRangeEl.textContent = `${fmt(week[0], {month:'short', day:'numeric'})} - ${fmt(week[6], {month:'short', day:'numeric', year:'numeric'})}`;
+
+      // header
+      thead.innerHTML = '';
+      const trh = document.createElement('tr');
+      trh.innerHTML = `<th class="sticky left-0 bg-white p-2 border-b-2 border-gray-200 z-20 text-left">Team Member</th>`;
+      week.forEach(d=>{
+        const isToday = toISO(d) === toISO(new Date());
+        trh.innerHTML += `
+          <th class="p-2 border-b-2 border-gray-200 text-center font-semibold">
+            <div class="${isToday ? 'text-blue-600' : ''}">
+              <div>${fmt(d,{weekday:'short'})}</div>
+              <div class="text-2xl">${fmt(d,{day:'numeric'})}</div>
+            </div>
+          </th>`;
+      });
+      thead.appendChild(trh);
+
+      // body
+      tbody.innerHTML = '';
+      members.forEach(m=>{
         const tr = document.createElement('tr');
-        tr.innerHTML = `<th class="sticky left-0 bg-white p-2 border-b-2 border-gray-200 z-20">Team Member</th>`;
-        week.forEach(d => {
-          const isToday = toISO(d) === toISO(new Date());
-          tr.innerHTML += `
-            <th class="p-2 border-b-2 border-gray-200 text-center font-semibold">
-              <div class="${isToday ? 'text-blue-600' : ''}">
-                <div>${formatDate(d, { weekday: 'short' })}</div>
-                <div class="text-2xl">${formatDate(d, { day: 'numeric' })}</div>
-              </div>
-            </th>`;
+        tr.innerHTML = `
+          <td class="sticky left-0 bg-white border-b border-gray-200 p-2 z-10 align-top">
+            <div class="font-bold text-gray-900">${m.name}</div>
+            <div class="text-sm text-gray-500">${m.role}</div>
+            <div class="text-xs text-gray-500 mt-1">Shift: ${m.shift}</div>
+            ${m.region ? `<div class="text-xs text-gray-500">Region: ${m.region}</div>`:''}
+            <div class="mt-2">
+              <button class="text-xs text-blue-600 hover:underline bulk-btn" data-member="${m.name}">Bulk Edit (Mon–Fri)</button>
+            </div>
+          </td>`;
+        week.forEach(d=>{
+          const ds = toISO(d);
+          const key = `${m.name}_${ds}`;
+          const s = statuses[key];
+          const klass = s ? `status-${s.status}` : 'status-default';
+          const title = s?.comment || '';
+          const td = document.createElement('td');
+          td.className = 'border-b border-gray-200 p-1';
+          td.innerHTML = `<div class="status-cell rounded-lg cursor-pointer ${klass}" data-member="${m.name}" data-date="${ds}" title="${title}"></div>`;
+          tr.appendChild(td);
         });
-        plannerHead.appendChild(tr);
-      };
+        tbody.appendChild(tr);
+      });
 
-      const renderPlanner = (week) => {
-        plannerBody.innerHTML = '';
-        teamMembers.forEach(member => {
-          const row = document.createElement('tr');
-          const regionHTML = member.region ? `<div class="text-xs text-gray-500">Region: ${member.region}</div>` : '';
-          row.innerHTML = `
-            <td class="sticky left-0 bg-white border-b border-gray-200 p-2 z-10 align-top">
-              <div class="font-bold text-gray-900">${member.name}</div>
-              <div class="text-sm text-gray-500">${member.role}</div>
-              <div class="text-xs text-gray-500 mt-1">Shift: ${member.shift}</div>
-              ${regionHTML}
-            </td>`;
-          week.forEach(d => {
-            const ds = toISO(d);
-            const key = `${member.name}_${ds}`;
-            const s = statuses[key];
-            const klass = s ? `status-${s.status}` : 'status-default';
-            const td = document.createElement('td');
-            td.className = 'border-b border-gray-200 p-1';
-            td.innerHTML = `<div class="status-cell relative rounded-lg ${klass}" title="${s?.comment || ''}"></div>`;
-            row.appendChild(td);
-          });
-          plannerBody.appendChild(row);
-        });
-      };
+      if (members.length === 0){ empty.classList.remove('hidden'); gridWrap.classList.add('hidden'); }
+      else { empty.classList.add('hidden'); gridWrap.classList.remove('hidden'); }
+    }
 
-      const updateEmptyState = () => {
-        if (teamMembers.length === 0) { emptyState.classList.remove('hidden'); gridContainer.classList.add('hidden'); }
-        else { emptyState.classList.add('hidden'); gridContainer.classList.remove('hidden'); }
-      };
+    // --- UI Events: Week nav ---
+    document.getElementById('prev-week').onclick = ()=>{ currentDate.setDate(currentDate.getDate()-7); render(); };
+    document.getElementById('next-week').onclick = ()=>{ currentDate.setDate(currentDate.getDate()+7); render(); };
+    document.getElementById('today').onclick     = ()=>{ currentDate = new Date(); render(); };
 
-      const showToast = (msg, tone='info') => {
-        toast.textContent = msg;
-        toast.classList.remove('hidden');
-        toast.classList.toggle('bg-red-600', tone==='error');
-        toast.classList.toggle('bg-green-600', tone==='success');
-        if (tone==='info') { toast.classList.add('bg-gray-900'); }
-        setTimeout(()=>{ toast.classList.add('hidden'); toast.classList.remove('bg-red-600','bg-green-600','bg-gray-900'); }, 2500);
-      };
-
-      // ===== INITIAL LOAD from Google Sheets =====
-      if (teamMembers.length === 0) {
-        fetch(API_URL)
-          .then(res => res.json())
-          .then(data => {
-            if (!data || !data.members) { render(); return; }
-
-            teamMembers = data.members.map(m => ({
-              name: m.name,
-              role: m.role,
-              shift: m.shift,
-              region: m.region
-            }));
-
-            statuses = data.statuses || {};
-
-            saveData();
-            showToast('Loaded starter data from Google Sheets', 'success');
-            render();
-          })
-          .catch(() => render());
-      } else {
-        render();
+    // --- UI Events: open status modal on cell click + per-member bulk ---
+    tbody.addEventListener('click', (e)=>{
+      const cell = e.target.closest('.status-cell');
+      if (cell){
+        const member = cell.dataset.member;
+        const date   = cell.dataset.date;
+        selected = { memberName: member, dateISO: date };
+        const existing = statuses[`${member}_${date}`];
+        statusComment.value = existing?.comment || '';
+        const d = new Date(date);
+        statusInfo.textContent = `${member} – ${fmt(d,{weekday:'long', month:'short', day:'numeric'})}`;
+        statusModal.classList.remove('hidden'); statusModal.classList.add('flex');
+        return;
+      }
+      const bulkBtn = e.target.closest('.bulk-btn');
+      if (bulkBtn){
+        bulkMemberName = bulkBtn.dataset.member;
+        bulkInfo.textContent = `Set status for ${bulkMemberName} for Mon–Fri of this week.`;
+        bulkModal.classList.remove('hidden'); bulkModal.classList.add('flex');
       }
     });
+
+    // --- Status modal actions ---
+    document.querySelectorAll('.status-choice').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if (!selected) return;
+        const st = btn.dataset.status;
+        const comment = statusComment.value || '';
+        // Optimistic local update
+        statuses[`${selected.memberName}_${selected.dateISO}`] = { status: st, comment };
+        render();
+        // Persist to Sheets
+        await apiSetStatus(selected.memberName, selected.dateISO, st, comment);
+        showToast('Status saved', 'success');
+        statusModal.classList.add('hidden'); statusModal.classList.remove('flex');
+      });
+    });
+
+    saveStatusBtn.onclick = async ()=>{
+      if (!selected) return;
+      const key = `${selected.memberName}_${selected.dateISO}`;
+      const existing = statuses[key];
+      if (existing){
+        existing.comment = statusComment.value || '';
+        // Persist only comment; reuse status
+        await apiSetStatus(selected.memberName, selected.dateISO, existing.status || '', existing.comment);
+        showToast('Comment saved', 'success');
+      }
+      statusModal.classList.add('hidden'); statusModal.classList.remove('flex');
+      render();
+    };
+
+    clearStatusBtn.onclick = async ()=>{
+      if (!selected) return;
+      // Clear locally (delete)
+      delete statuses[`${selected.memberName}_${selected.dateISO}`];
+      render();
+      // Persist as empty (server will overwrite row)
+      await apiSetStatus(selected.memberName, selected.dateISO, '', '');
+      showToast('Status cleared', 'success');
+      statusModal.classList.add('hidden'); statusModal.classList.remove('flex');
+    };
+
+    closeStatusBtn.onclick = ()=>{
+      statusModal.classList.add('hidden'); statusModal.classList.remove('flex');
+    };
+
+    // --- Bulk modal actions (Mon–Fri) ---
+    document.querySelectorAll('.bulk-choice').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if (!bulkMemberName) return;
+        const st = btn.dataset.status;
+        const week = getWeek(currentDate);
+        // Mon–Fri only: dow 1..5 (Sun=0, Sat=6)
+        for (const d of week){
+          const dow = d.getDay();
+          if (dow >= 1 && dow <= 5){
+            const ds = toISO(d);
+            statuses[`${bulkMemberName}_${ds}`] = { status: st, comment: '' };
+            // persist one-by-one (keeps script simple)
+            await apiSetStatus(bulkMemberName, ds, st, '');
+          }
+        }
+        render();
+        showToast('Bulk update applied', 'success');
+        bulkModal.classList.add('hidden'); bulkModal.classList.remove('flex');
+      });
+    });
+    closeBulkBtn.onclick = ()=>{
+      bulkModal.classList.add('hidden'); bulkModal.classList.remove('flex');
+    };
+
+    // --- Initial load from Google Sheets ---
+    (async function init(){
+      try{
+        const data = await apiGetData();
+        members  = data.members || [];
+        statuses = data.statuses || {};
+        render();
+        showToast('Loaded from Google Sheets','success');
+      }catch(err){
+        console.error(err);
+        render();
+        showToast('Could not load data','error');
+      }
+    })();
   </script>
 </body>
 </html>
+
