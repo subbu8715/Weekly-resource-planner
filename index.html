@@ -124,43 +124,124 @@
   <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden"></div>
 
   <script>
-    // === Replace with your Apps Script URL ===
     const API_BASE = "https://script.google.com/macros/s/AKfycbyKziIiPKCEG8bjnEvYw2oFh0FehfLUCJcB6JKCqIypA-KwNsKCb2qnfAF7hbPKjjah/exec";
 
-    // (your old working JS here: fetch members, render grid, status modal, per-member bulk modal)
-    // Keep all functions like getWeek, render, apiGetData, apiSetStatus, etc.
+    let members = [];
+    let statuses = {};
+    let currentDate = new Date();
 
-    // === Add new Team Bulk Update logic ===
-    const teamBulkBtn = document.getElementById('team-bulk-btn');
-    const teamBulkModal = document.getElementById('team-bulk-modal');
-    const closeTeamBulk = document.getElementById('close-team-bulk');
+    const weekRange = document.getElementById('week-range');
+    const thead = document.getElementById('thead');
+    const tbody = document.getElementById('tbody');
+    const toast = document.getElementById('toast');
 
-    teamBulkBtn.onclick = ()=> {
-      teamBulkModal.classList.remove('hidden'); teamBulkModal.classList.add('flex');
+    const showToast = (msg) => {
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      setTimeout(()=> toast.classList.add('hidden'),2000);
     };
-    closeTeamBulk.onclick = ()=> {
-      teamBulkModal.classList.add('hidden'); teamBulkModal.classList.remove('flex');
+
+    const toISO = d => d.toISOString().split('T')[0];
+    const getWeek = (date) => {
+      const monday = new Date(date);
+      const day = monday.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      monday.setDate(monday.getDate()+diff);
+      return Array.from({length:7},(_,i)=>{
+        const d = new Date(monday);
+        d.setDate(monday.getDate()+i);
+        return d;
+      });
     };
+
+    async function apiGetData(){
+      const res = await fetch(API_BASE+"?action=getAll");
+      return res.json();
+    }
+    async function apiSetStatus(name,date,status,comment){
+      await fetch(API_BASE+"?action=setStatus",{
+        method:"POST",
+        body: JSON.stringify({ member_name:name,date_iso:date,status,comment })
+      });
+    }
+
+    function render(){
+      const week = getWeek(currentDate);
+      const start = week[0].toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      const end = week[6].toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      weekRange.textContent = `${start} - ${end}`;
+
+      thead.innerHTML="";
+      const tr = document.createElement('tr');
+      tr.innerHTML=`<th class="p-2">Team Member</th>`+week.map(d=>`
+        <th class="p-2 text-center">${d.toLocaleDateString('en-US',{weekday:'short'})}<br>${d.getDate()}</th>`).join('');
+      thead.appendChild(tr);
+
+      tbody.innerHTML="";
+      members.forEach(m=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td class="p-2 font-semibold">${m.name}<br>
+          <span class="text-sm text-gray-500">${m.role}</span><br>
+          <span class="text-xs text-gray-500">Shift: ${m.shift}</span><br>
+          <span class="text-xs text-gray-500">Region: ${m.region}</span><br>
+          <button class="bulk-btn text-xs text-blue-600 underline mt-1" data-name="${m.name}">Bulk Edit</button>
+        </td>`;
+        week.forEach(d=>{
+          const ds=toISO(d);
+          const key=`${m.name}_${ds}`;
+          const st=statuses[key]?.status;
+          const klass=st?`status-${st}`:'status-default';
+          const cell=`<div class="status-cell rounded-lg flex items-center justify-center ${klass}" 
+             data-name="${m.name}" data-date="${ds}">${st?st.toUpperCase().replace('-',' '):''}</div>`;
+          tr.innerHTML+=`<td class="p-1 text-center">${cell}</td>`;
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ==== Events ====
+    document.getElementById('prev-week').onclick=()=>{currentDate.setDate(currentDate.getDate()-7);render();};
+    document.getElementById('next-week').onclick=()=>{currentDate.setDate(currentDate.getDate()+7);render();};
+    document.getElementById('today').onclick=()=>{currentDate=new Date();render();};
+
+    // TODO: hook up modal open/save/clear for single-cell
+    // TODO: hook up bulk modal per member
+
+    // === Team Bulk Update Events ===
+    const teamBulkBtn=document.getElementById('team-bulk-btn');
+    const teamBulkModal=document.getElementById('team-bulk-modal');
+    const closeTeamBulk=document.getElementById('close-team-bulk');
+
+    teamBulkBtn.onclick=()=>{teamBulkModal.classList.remove('hidden');teamBulkModal.classList.add('flex');};
+    closeTeamBulk.onclick=()=>{teamBulkModal.classList.add('hidden');teamBulkModal.classList.remove('flex');};
 
     document.querySelectorAll('.team-bulk-choice').forEach(btn=>{
-      btn.addEventListener('click', async ()=>{
-        const st = btn.dataset.status;
-        const week = getWeek(currentDate);
-        for (const m of members){
-          for (const d of week){
-            const dow = d.getDay();
-            if (dow >= 1 && dow <= 5){ // Mon–Fri
-              const ds = toISO(d);
-              statuses[`${m.name}_${ds}`] = { status: st, comment: '' };
-              await apiSetStatus(m.name, ds, st, '');
+      btn.addEventListener('click',async()=>{
+        const st=btn.dataset.status;
+        const week=getWeek(currentDate);
+        for(const m of members){
+          for(const d of week){
+            const dow=d.getDay();
+            if(dow>=1 && dow<=5){
+              const ds=toISO(d);
+              statuses[`${m.name}_${ds}`]={status:st,comment:''};
+              await apiSetStatus(m.name,ds,st,'');
             }
           }
         }
         render();
-        showToast('Team bulk update applied','success');
-        teamBulkModal.classList.add('hidden'); teamBulkModal.classList.remove('flex');
+        showToast('Team bulk update applied');
+        teamBulkModal.classList.add('hidden');teamBulkModal.classList.remove('flex');
       });
     });
+
+    // === Init ===
+    (async()=>{
+      const data=await apiGetData();
+      members=data.members||[];
+      statuses=data.statuses||{};
+      render();
+    })();
   </script>
 </body>
 </html>
