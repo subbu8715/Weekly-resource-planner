@@ -2,350 +2,221 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resource Availability Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     body { font-family: 'Inter', sans-serif; }
     .status-cell { min-width: 120px; height: 80px; transition: transform .2s; }
-    .status-cell:hover { transform: scale(1.03); }
+    .status-cell:hover { transform: scale(1.05); z-index: 10; }
     .status-wfo { background-color:#166534; color:#fff; }
     .status-wfh { background-color:#86efac; color:#14532d; }
     .status-planned-leave { background-color:#f97316; color:#fff; }
     .status-unplanned-leave { background-color:#b91c1c; color:#fff; }
     .status-default { background-color:#f3f4f6; }
-    .modal-backdrop { background: rgba(0,0,0,.5); }
-    .table-container::-webkit-scrollbar { display: none; }
-    .table-container { -ms-overflow-style:none; scrollbar-width:none; }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-800 antialiased">
   <div class="container mx-auto p-4 sm:p-6 lg:p-8">
     <header class="text-center mb-6">
       <h1 class="text-4xl font-bold text-gray-900">Resource Availability Tracker</h1>
-      <p id="week-range" class="text-xl text-gray-600 mt-2"></p>
+      <p id="week-range-display" class="text-xl text-gray-600 mt-2"></p>
     </header>
 
-    <!-- Top Controls -->
-    <div class="flex flex-wrap items-center justify-center gap-3 mb-6">
-      <button id="prev-week" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">- Week</button>
-      <button id="today" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">Today</button>
-      <button id="next-week" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">+ Week</button>
+    <!-- Controls -->
+    <div class="flex flex-wrap justify-center gap-3 mb-6">
+      <button id="prev-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">- Week</button>
+      <button id="today-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">Today</button>
+      <button id="next-week-btn" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">+ Week</button>
+      <button id="team-bulk-btn" class="bg-purple-600 text-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-purple-700">Team Bulk Update</button>
+      <button id="export-csv-btn" class="bg-gray-900 text-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-black">Export CSV (All)</button>
     </div>
 
-    <!-- Grid -->
-    <div class="bg-white rounded-xl shadow-lg p-4 overflow-hidden">
-      <div id="grid-wrap" class="table-container overflow-x-auto">
-        <table class="w-full border-collapse">
-          <thead id="thead"></thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-      <div id="empty" class="hidden text-center py-16">
-        <h3 class="text-xl font-semibold text-gray-700">Your planner is empty</h3>
-        <p class="text-gray-500 mt-2">Add people to the <b>Members</b> tab in the Google Sheet.</p>
-      </div>
-    </div>
-
-    <!-- Legend -->
-    <div class="mt-6">
-      <h2 class="text-lg font-semibold mb-2">Legend</h2>
-      <div class="flex flex-wrap gap-3">
-        <span class="px-3 py-2 rounded-lg status-wfo font-semibold">WFO</span>
-        <span class="px-3 py-2 rounded-lg status-wfh font-semibold">WFH</span>
-        <span class="px-3 py-2 rounded-lg status-planned-leave font-semibold">Planned Leave</span>
-        <span class="px-3 py-2 rounded-lg status-unplanned-leave font-semibold">Unplanned Leave</span>
-        <span class="px-3 py-2 rounded-lg status-default font-semibold">No Data</span>
-      </div>
+    <!-- Planner Grid -->
+    <div class="bg-white rounded-xl shadow-lg p-4 overflow-x-auto">
+      <table class="w-full border-collapse">
+        <thead id="planner-head"></thead>
+        <tbody id="planner-body"></tbody>
+      </table>
     </div>
   </div>
 
   <!-- Status Modal -->
-  <div id="status-modal" class="modal-backdrop fixed inset-0 hidden items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
-      <h2 class="text-2xl font-bold mb-1">Set Status</h2>
-      <p id="status-info" class="text-gray-600 mb-4"></p>
-      <div class="grid grid-cols-1 gap-2 mb-4">
-        <button class="status-choice status-wfo py-2 rounded font-bold" data-status="wfo">Work from Office</button>
-        <button class="status-choice status-wfh py-2 rounded font-bold" data-status="wfh">Work from Home</button>
-        <button class="status-choice status-planned-leave py-2 rounded font-bold" data-status="planned-leave">Planned Leave</button>
-        <button class="status-choice status-unplanned-leave py-2 rounded font-bold" data-status="unplanned-leave">Unplanned Leave</button>
+  <div id="status-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-80">
+      <h2 class="text-xl font-bold mb-2">Set Status</h2>
+      <p id="status-modal-info" class="text-gray-600 mb-4"></p>
+      <div class="grid gap-2 mb-4">
+        <button data-status="wfo" class="status-btn status-wfo py-2 rounded">Work from Office</button>
+        <button data-status="wfh" class="status-btn status-wfh py-2 rounded">Work from Home</button>
+        <button data-status="planned-leave" class="status-btn status-planned-leave py-2 rounded">Planned Leave</button>
+        <button data-status="unplanned-leave" class="status-btn status-unplanned-leave py-2 rounded">Unplanned Leave</button>
       </div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Comment (optional)</label>
-      <input id="status-comment" class="w-full border rounded px-3 py-2 mb-4" placeholder="Optional note"/>
-      <div class="flex justify-between items-center">
-        <button id="clear-status" class="text-red-600 font-semibold hover:text-red-800">Clear Status</button>
-        <div class="space-x-2">
-          <button id="close-status" class="bg-gray-200 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
-          <button id="save-status" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Save</button>
-        </div>
+      <input type="text" id="status-comment" placeholder="Optional comment" class="border p-2 w-full mb-4 rounded">
+      <div class="flex justify-end gap-2">
+        <button id="cancel-status-btn" class="bg-gray-200 px-4 py-2 rounded">Cancel</button>
+        <button id="save-status-btn" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
       </div>
     </div>
   </div>
 
-  <!-- Bulk Modal -->
-  <div id="bulk-modal" class="modal-backdrop fixed inset-0 hidden items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
-      <h2 class="text-2xl font-bold mb-1">Bulk Update (Mon–Fri)</h2>
-      <p id="bulk-info" class="text-gray-600 mb-4"></p>
-      <div class="grid grid-cols-1 gap-2 mb-2">
-        <button class="bulk-choice status-wfo py-2 rounded font-bold" data-status="wfo">Work from Office</button>
-        <button class="bulk-choice status-wfh py-2 rounded font-bold" data-status="wfh">Work from Home</button>
-        <button class="bulk-choice status-planned-leave py-2 rounded font-bold" data-status="planned-leave">Planned Leave</button>
-        <button class="bulk-choice status-unplanned-leave py-2 rounded font-bold" data-status="unplanned-leave">Unplanned Leave</button>
+  <!-- Team Bulk Modal -->
+  <div id="team-bulk-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-80">
+      <h2 class="text-xl font-bold mb-4">Team Bulk Update (Mon–Fri)</h2>
+      <div class="grid gap-2 mb-4">
+        <button data-status="wfo" class="team-bulk-btn status-wfo py-2 rounded">Work from Office</button>
+        <button data-status="wfh" class="team-bulk-btn status-wfh py-2 rounded">Work from Home</button>
+        <button data-status="planned-leave" class="team-bulk-btn status-planned-leave py-2 rounded">Planned Leave</button>
+        <button data-status="unplanned-leave" class="team-bulk-btn status-unplanned-leave py-2 rounded">Unplanned Leave</button>
       </div>
-      <div class="text-right">
-        <button id="close-bulk" class="bg-gray-200 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300">Close</button>
-      </div>
+      <button id="cancel-team-bulk-btn" class="bg-gray-200 px-4 py-2 rounded w-full">Cancel</button>
     </div>
   </div>
-
-  <!-- Toast -->
-  <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden"></div>
 
   <script>
-    // === Replace this with YOUR Apps Script Web App URL (the one ending with /exec)
-    const API_BASE = "https://script.google.com/macros/s/AKfycbyKziIiPKCEG8bjnEvYw2oFh0FehfLUCJcB6JKCqIypA-KwNsKCb2qnfAF7hbPKjjah/exec";
+    const API_BASE = "https://script.google.com/macros/s/AKfycbyKziIiPKCEG8bjnEvYw2oFh0FehfLUCJcB6JKCqIypA-KwNsKCb2qnfAF7hbPKjjah/exec
+";
 
-    // --- State ---
+    let teamMembers = [];
+    let statuses = {};
     let currentDate = new Date();
-    let members = [];                       // [{name, role, shift, region}]
-    let statuses = {};                      // { "Name_YYYY-MM-DD": {status, comment} }
-    let selected = null;                    // { memberName, dateISO }
-    let bulkMemberName = null;
+    let selectedCell = null;
 
-    // --- DOM ---
-    const weekRangeEl = document.getElementById('week-range');
-    const thead = document.getElementById('thead');
-    const tbody = document.getElementById('tbody');
-    const empty = document.getElementById('empty');
-    const gridWrap = document.getElementById('grid-wrap');
-    const toast = document.getElementById('toast');
+    const plannerHead = document.getElementById('planner-head');
+    const plannerBody = document.getElementById('planner-body');
+    const weekRangeDisplay = document.getElementById('week-range-display');
 
-    // Modals
-    const statusModal = document.getElementById('status-modal');
-    const statusInfo = document.getElementById('status-info');
-    const statusComment = document.getElementById('status-comment');
-    const saveStatusBtn = document.getElementById('save-status');
-    const clearStatusBtn = document.getElementById('clear-status');
-    const closeStatusBtn = document.getElementById('close-status');
-
-    const bulkModal = document.getElementById('bulk-modal');
-    const bulkInfo = document.getElementById('bulk-info');
-    const closeBulkBtn = document.getElementById('close-bulk');
-
-    // --- Helpers ---
-    const toISO = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().split('T')[0];
-    const fmt = (d, opts) => d.toLocaleString('en-US', opts);
-    function getWeek(date){
-      const out = [];
-      const t = new Date(date);
-      const dow = t.getDay();                       // 0..6 (Sun..Sat)
-      const mon = new Date(t);
-      const offset = (dow === 0) ? 6 : (dow - 1);   // back to Monday
-      mon.setDate(t.getDate() - offset);
-      for (let i=0;i<7;i++){
-        const d = new Date(mon); d.setDate(mon.getDate()+i); out.push(d);
+    const getWeek = (date) => {
+      const week = [];
+      const day = date.getDay(); // 0=Sun
+      const monday = new Date(date);
+      const offset = day === 0 ? -6 : 1 - day;
+      monday.setDate(date.getDate() + offset);
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        week.push(d);
       }
-      return out;
+      return week;
+    };
+    const toISO = (d) => d.toISOString().split("T")[0];
+
+    async function fetchData() {
+      const res = await fetch(API_BASE + "?action=getData");
+      const data = await res.json();
+      teamMembers = data.members || [];
+      statuses = data.statuses || {};
+      render();
     }
 
-    function showToast(msg, tone='info'){
-      toast.textContent = msg;
-      toast.classList.remove('hidden');
-      toast.classList.toggle('bg-green-600', tone==='success');
-      toast.classList.toggle('bg-red-600', tone==='error');
-      if (tone==='info') { toast.classList.add('bg-gray-900'); }
-      setTimeout(()=>{ toast.classList.add('hidden'); toast.classList.remove('bg-green-600','bg-red-600','bg-gray-900'); }, 2200);
-    }
-
-    // --- API ---
-    async function apiGetData(){
-      const res = await fetch(`${API_BASE}?action=getData`);
-      if (!res.ok) throw new Error('Failed to fetch data');
-      return res.json();
-    }
-    async function apiSetStatus(memberName, dateISO, status, comment){
-      await fetch(API_BASE, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'setStatus',
-          member: memberName,
-          date: dateISO,
-          status,
-          comment: comment || ''
-        })
-      });
-    }
-
-    // --- Render ---
-    function render(){
+    function render() {
       const week = getWeek(currentDate);
-      weekRangeEl.textContent = `${fmt(week[0], {month:'short', day:'numeric'})} - ${fmt(week[6], {month:'short', day:'numeric', year:'numeric'})}`;
+      plannerHead.innerHTML = "";
+      plannerBody.innerHTML = "";
 
-      // header
-      thead.innerHTML = '';
-      const trh = document.createElement('tr');
-      trh.innerHTML = `<th class="sticky left-0 bg-white p-2 border-b-2 border-gray-200 z-20 text-left">Team Member</th>`;
-      week.forEach(d=>{
-        const isToday = toISO(d) === toISO(new Date());
-        trh.innerHTML += `
-          <th class="p-2 border-b-2 border-gray-200 text-center font-semibold">
-            <div class="${isToday ? 'text-blue-600' : ''}">
-              <div>${fmt(d,{weekday:'short'})}</div>
-              <div class="text-2xl">${fmt(d,{day:'numeric'})}</div>
-            </div>
-          </th>`;
+      const start = week[0].toDateString();
+      const end = week[6].toDateString();
+      weekRangeDisplay.textContent = `${start} – ${end}`;
+
+      let tr = document.createElement("tr");
+      tr.innerHTML = `<th class="p-2 bg-gray-100">Member</th>`;
+      week.forEach(d => {
+        tr.innerHTML += `<th class="p-2 bg-gray-100">${d.toDateString().slice(0,10)}</th>`;
       });
-      thead.appendChild(trh);
+      plannerHead.appendChild(tr);
 
-      // body
-      tbody.innerHTML = '';
-      members.forEach(m=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="sticky left-0 bg-white border-b border-gray-200 p-2 z-10 align-top">
-            <div class="font-bold text-gray-900">${m.name}</div>
-            <div class="text-sm text-gray-500">${m.role}</div>
-            <div class="text-xs text-gray-500 mt-1">Shift: ${m.shift}</div>
-            ${m.region ? `<div class="text-xs text-gray-500">Region: ${m.region}</div>`:''}
-            <div class="mt-2">
-              <button class="text-xs text-blue-600 hover:underline bulk-btn" data-member="${m.name}">Bulk Edit (Mon–Fri)</button>
-            </div>
-          </td>`;
-        week.forEach(d=>{
-          const ds = toISO(d);
-          const key = `${m.name}_${ds}`;
+      teamMembers.forEach(m => {
+        let row = document.createElement("tr");
+        row.innerHTML = `<td class="p-2 border font-bold">${m.name}<br><span class="text-sm text-gray-500">${m.role}, ${m.shift}, ${m.region}</span></td>`;
+        week.forEach(d => {
+          const key = `${m.name}_${toISO(d)}`;
           const s = statuses[key];
-          const klass = s ? `status-${s.status}` : 'status-default';
-          const title = s?.comment || '';
-          const td = document.createElement('td');
-          td.className = 'border-b border-gray-200 p-1';
-          td.innerHTML = `<div class="status-cell rounded-lg cursor-pointer ${klass}" data-member="${m.name}" data-date="${ds}" title="${title}"></div>`;
-          tr.appendChild(td);
+          const klass = s ? `status-${s.status}` : "status-default";
+          row.innerHTML += `<td class="border p-1"><div class="status-cell ${klass}" data-member="${m.name}" data-date="${toISO(d)}"></div></td>`;
         });
-        tbody.appendChild(tr);
+        plannerBody.appendChild(row);
       });
-
-      if (members.length === 0){ empty.classList.remove('hidden'); gridWrap.classList.add('hidden'); }
-      else { empty.classList.add('hidden'); gridWrap.classList.remove('hidden'); }
     }
 
-    // --- UI Events: Week nav ---
-    document.getElementById('prev-week').onclick = ()=>{ currentDate.setDate(currentDate.getDate()-7); render(); };
-    document.getElementById('next-week').onclick = ()=>{ currentDate.setDate(currentDate.getDate()+7); render(); };
-    document.getElementById('today').onclick     = ()=>{ currentDate = new Date(); render(); };
-
-    // --- UI Events: open status modal on cell click + per-member bulk ---
-    tbody.addEventListener('click', (e)=>{
-      const cell = e.target.closest('.status-cell');
-      if (cell){
-        const member = cell.dataset.member;
-        const date   = cell.dataset.date;
-        selected = { memberName: member, dateISO: date };
-        const existing = statuses[`${member}_${date}`];
-        statusComment.value = existing?.comment || '';
-        const d = new Date(date);
-        statusInfo.textContent = `${member} – ${fmt(d,{weekday:'long', month:'short', day:'numeric'})}`;
-        statusModal.classList.remove('hidden'); statusModal.classList.add('flex');
-        return;
-      }
-      const bulkBtn = e.target.closest('.bulk-btn');
-      if (bulkBtn){
-        bulkMemberName = bulkBtn.dataset.member;
-        bulkInfo.textContent = `Set status for ${bulkMemberName} for Mon–Fri of this week.`;
-        bulkModal.classList.remove('hidden'); bulkModal.classList.add('flex');
-      }
+    // Cell click
+    plannerBody.addEventListener("click", (e) => {
+      const cell = e.target.closest(".status-cell");
+      if (!cell) return;
+      selectedCell = { member: cell.dataset.member, date: cell.dataset.date };
+      document.getElementById("status-modal-info").textContent = `${selectedCell.member} on ${selectedCell.date}`;
+      document.getElementById("status-modal").classList.remove("hidden");
     });
 
-    // --- Status modal actions ---
-    document.querySelectorAll('.status-choice').forEach(btn=>{
-      btn.addEventListener('click', async ()=>{
-        if (!selected) return;
-        const st = btn.dataset.status;
-        const comment = statusComment.value || '';
-        // Optimistic local update
-        statuses[`${selected.memberName}_${selected.dateISO}`] = { status: st, comment };
-        render();
-        // Persist to Sheets
-        await apiSetStatus(selected.memberName, selected.dateISO, st, comment);
-        showToast('Status saved', 'success');
-        statusModal.classList.add('hidden'); statusModal.classList.remove('flex');
+    // Modal buttons
+    document.getElementById("cancel-status-btn").onclick = () => document.getElementById("status-modal").classList.add("hidden");
+    document.querySelectorAll(".status-btn").forEach(btn => {
+      btn.onclick = () => {
+        saveStatus(selectedCell.member, selectedCell.date, btn.dataset.status, document.getElementById("status-comment").value);
+        document.getElementById("status-modal").classList.add("hidden");
+      };
+    });
+
+    async function saveStatus(member, date, status, comment) {
+      await fetch(API_BASE, {
+        method: "POST",
+        body: JSON.stringify({ action: "setStatus", member, date, status, comment }),
       });
-    });
+      fetchData();
+    }
 
-    saveStatusBtn.onclick = async ()=>{
-      if (!selected) return;
-      const key = `${selected.memberName}_${selected.dateISO}`;
-      const existing = statuses[key];
-      if (existing){
-        existing.comment = statusComment.value || '';
-        // Persist only comment; reuse status
-        await apiSetStatus(selected.memberName, selected.dateISO, existing.status || '', existing.comment);
-        showToast('Comment saved', 'success');
-      }
-      statusModal.classList.add('hidden'); statusModal.classList.remove('flex');
-      render();
-    };
+    // Week nav
+    document.getElementById("prev-week-btn").onclick = () => { currentDate.setDate(currentDate.getDate()-7); render(); };
+    document.getElementById("next-week-btn").onclick = () => { currentDate.setDate(currentDate.getDate()+7); render(); };
+    document.getElementById("today-btn").onclick = () => { currentDate = new Date(); render(); };
 
-    clearStatusBtn.onclick = async ()=>{
-      if (!selected) return;
-      // Clear locally (delete)
-      delete statuses[`${selected.memberName}_${selected.dateISO}`];
-      render();
-      // Persist as empty (server will overwrite row)
-      await apiSetStatus(selected.memberName, selected.dateISO, '', '');
-      showToast('Status cleared', 'success');
-      statusModal.classList.add('hidden'); statusModal.classList.remove('flex');
-    };
-
-    closeStatusBtn.onclick = ()=>{
-      statusModal.classList.add('hidden'); statusModal.classList.remove('flex');
-    };
-
-    // --- Bulk modal actions (Mon–Fri) ---
-    document.querySelectorAll('.bulk-choice').forEach(btn=>{
-      btn.addEventListener('click', async ()=>{
-        if (!bulkMemberName) return;
-        const st = btn.dataset.status;
+    // Team Bulk
+    document.getElementById("team-bulk-btn").onclick = () => document.getElementById("team-bulk-modal").classList.remove("hidden");
+    document.getElementById("cancel-team-bulk-btn").onclick = () => document.getElementById("team-bulk-modal").classList.add("hidden");
+    document.querySelectorAll(".team-bulk-btn").forEach(btn => {
+      btn.onclick = async () => {
         const week = getWeek(currentDate);
-        // Mon–Fri only: dow 1..5 (Sun=0, Sat=6)
-        for (const d of week){
-          const dow = d.getDay();
-          if (dow >= 1 && dow <= 5){
-            const ds = toISO(d);
-            statuses[`${bulkMemberName}_${ds}`] = { status: st, comment: '' };
-            // persist one-by-one (keeps script simple)
-            await apiSetStatus(bulkMemberName, ds, st, '');
-          }
-        }
-        render();
-        showToast('Bulk update applied', 'success');
-        bulkModal.classList.add('hidden'); bulkModal.classList.remove('flex');
-      });
+        const updates = [];
+        teamMembers.forEach(m => {
+          week.forEach(d => {
+            if (d.getDay() >= 1 && d.getDay() <= 5) {
+              updates.push({ member: m.name, date: toISO(d), status: btn.dataset.status, comment: "" });
+            }
+          });
+        });
+        await fetch(API_BASE, {
+          method: "POST",
+          body: JSON.stringify({ action: "bulkSet", updates }),
+        });
+        document.getElementById("team-bulk-modal").classList.add("hidden");
+        fetchData();
+      };
     });
-    closeBulkBtn.onclick = ()=>{
-      bulkModal.classList.add('hidden'); bulkModal.classList.remove('flex');
+
+    // Export CSV
+    document.getElementById("export-csv-btn").onclick = async () => {
+      const res = await fetch(API_BASE + "?action=getData");
+      const data = await res.json();
+      let rows = [["name","role","shift","region","date_iso","status"]];
+      data.members.forEach(m => {
+        Object.keys(data.statuses).forEach(k => {
+          if (k.startsWith(m.name+"_")) {
+            const date = k.split("_")[1];
+            rows.push([m.name,m.role,m.shift,m.region,date,data.statuses[k].status]);
+          }
+        });
+      });
+      const csv = rows.map(r => r.join(",")).join("\n");
+      const blob = new Blob([csv], { type:"text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "ResourceTracker_All.csv";
+      a.click();
+      URL.revokeObjectURL(url);
     };
 
-    // --- Initial load from Google Sheets ---
-    (async function init(){
-      try{
-        const data = await apiGetData();
-        members  = data.members || [];
-        statuses = data.statuses || {};
-        render();
-        showToast('Loaded from Google Sheets','success');
-      }catch(err){
-        console.error(err);
-        render();
-        showToast('Could not load data','error');
-      }
-    })();
+    fetchData();
   </script>
 </body>
 </html>
-
-
-
