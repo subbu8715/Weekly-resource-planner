@@ -8,8 +8,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     body { font-family: 'Inter', sans-serif; }
-    .status-cell { min-width: 120px; height: 80px; transition: transform .2s; }
-    .status-cell:hover { transform: scale(1.03); }
+    .status-cell { min-width: 100px; height: 70px; transition: transform .2s; }
+    .status-cell:hover { transform: scale(1.03); cursor:pointer; }
     .status-wfo { background-color:#166534; color:#fff; }
     .status-wfh { background-color:#86efac; color:#14532d; }
     .status-planned-leave { background-color:#f97316; color:#fff; }
@@ -32,7 +32,6 @@
       <button id="prev-week" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">- Week</button>
       <button id="today" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">Today</button>
       <button id="next-week" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">+ Week</button>
-      <!-- NEW Team Bulk Update Button -->
       <button id="team-bulk-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-blue-700">Team Bulk Update (Mon–Fri)</button>
     </div>
 
@@ -103,7 +102,7 @@
     </div>
   </div>
 
-  <!-- NEW Team Bulk Modal -->
+  <!-- Team Bulk Modal -->
   <div id="team-bulk-modal" class="modal-backdrop fixed inset-0 hidden items-center justify-center p-4 z-50">
     <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
       <h2 class="text-2xl font-bold mb-1">Team Bulk Update (Mon–Fri)</h2>
@@ -129,17 +128,7 @@
     let members = [];
     let statuses = {};
     let currentDate = new Date();
-
-    const weekRange = document.getElementById('week-range');
-    const thead = document.getElementById('thead');
-    const tbody = document.getElementById('tbody');
-    const toast = document.getElementById('toast');
-
-    const showToast = (msg) => {
-      toast.textContent = msg;
-      toast.classList.remove('hidden');
-      setTimeout(()=> toast.classList.add('hidden'),2000);
-    };
+    let selectedCell = null;
 
     const toISO = d => d.toISOString().split('T')[0];
     const getWeek = (date) => {
@@ -155,13 +144,20 @@
     };
 
     async function apiGetData(){
-      const res = await fetch(API_BASE+"?action=getAll");
+      const res = await fetch(API_BASE+"?action=getData");
       return res.json();
     }
+
     async function apiSetStatus(name,date,status,comment){
-      await fetch(API_BASE+"?action=setStatus",{
+      await fetch(API_BASE,{
         method:"POST",
-        body: JSON.stringify({ member_name:name,date_iso:date,status,comment })
+        body: JSON.stringify({ 
+          action:"setStatus",
+          member:name,
+          date:date,
+          status:status,
+          comment:comment 
+        })
       });
     }
 
@@ -169,8 +165,10 @@
       const week = getWeek(currentDate);
       const start = week[0].toLocaleDateString('en-US',{month:'short',day:'numeric'});
       const end = week[6].toLocaleDateString('en-US',{month:'short',day:'numeric'});
-      weekRange.textContent = `${start} - ${end}`;
+      document.getElementById('week-range').textContent = `${start} - ${end}`;
 
+      const thead = document.getElementById('thead');
+      const tbody = document.getElementById('tbody');
       thead.innerHTML="";
       const tr = document.createElement('tr');
       tr.innerHTML=`<th class="p-2">Team Member</th>`+week.map(d=>`
@@ -192,37 +190,94 @@
           const st=statuses[key]?.status;
           const klass=st?`status-${st}`:'status-default';
           const cell=`<div class="status-cell rounded-lg flex items-center justify-center ${klass}" 
-             data-name="${m.name}" data-date="${ds}">${st?st.toUpperCase().replace('-',' '):''}</div>`;
+             data-name="${m.name}" data-date="${ds}" title="${statuses[key]?.comment||''}">
+             ${st?st.toUpperCase().replace('-',' '):''}</div>`;
           tr.innerHTML+=`<td class="p-1 text-center">${cell}</td>`;
         });
         tbody.appendChild(tr);
       });
     }
 
-    // ==== Events ====
+    // Navigation
     document.getElementById('prev-week').onclick=()=>{currentDate.setDate(currentDate.getDate()-7);render();};
     document.getElementById('next-week').onclick=()=>{currentDate.setDate(currentDate.getDate()+7);render();};
     document.getElementById('today').onclick=()=>{currentDate=new Date();render();};
 
-    // TODO: hook up modal open/save/clear for single-cell
-    // TODO: hook up bulk modal per member
+    // Cell click
+    document.getElementById('tbody').onclick=(e)=>{
+      const cell=e.target.closest('.status-cell');
+      if(!cell) return;
+      selectedCell={name:cell.dataset.name,date:cell.dataset.date};
+      document.getElementById('status-info').textContent=`${cell.dataset.name} on ${cell.dataset.date}`;
+      document.getElementById('status-comment').value=statuses[`${cell.dataset.name}_${cell.dataset.date}`]?.comment||'';
+      document.getElementById('status-modal').classList.remove('hidden');document.getElementById('status-modal').classList.add('flex');
+    };
 
-    // === Team Bulk Update Events ===
-    const teamBulkBtn=document.getElementById('team-bulk-btn');
-    const teamBulkModal=document.getElementById('team-bulk-modal');
-    const closeTeamBulk=document.getElementById('close-team-bulk');
+    // Status modal events
+    document.querySelectorAll('.status-choice').forEach(btn=>{
+      btn.onclick=async()=>{
+        const st=btn.dataset.status;
+        const key=`${selectedCell.name}_${selectedCell.date}`;
+        statuses[key]={status:st,comment:document.getElementById('status-comment').value};
+        await apiSetStatus(selectedCell.name,selectedCell.date,st,document.getElementById('status-comment').value);
+        render();
+        document.getElementById('status-modal').classList.add('hidden');document.getElementById('status-modal').classList.remove('flex');
+      };
+    });
+    document.getElementById('save-status').onclick=async()=>{
+      const key=`${selectedCell.name}_${selectedCell.date}`;
+      const comment=document.getElementById('status-comment').value;
+      if(statuses[key]) statuses[key].comment=comment;
+      await apiSetStatus(selectedCell.name,selectedCell.date,statuses[key]?.status||'',comment);
+      render();
+      document.getElementById('status-modal').classList.add('hidden');document.getElementById('status-modal').classList.remove('flex');
+    };
+    document.getElementById('clear-status').onclick=async()=>{
+      const key=`${selectedCell.name}_${selectedCell.date}`;
+      statuses[key]={status:'',comment:''};
+      await apiSetStatus(selectedCell.name,selectedCell.date,'','');
+      render();
+      document.getElementById('status-modal').classList.add('hidden');document.getElementById('status-modal').classList.remove('flex');
+    };
+    document.getElementById('close-status').onclick=()=>{document.getElementById('status-modal').classList.add('hidden');document.getElementById('status-modal').classList.remove('flex');};
 
-    teamBulkBtn.onclick=()=>{teamBulkModal.classList.remove('hidden');teamBulkModal.classList.add('flex');};
-    closeTeamBulk.onclick=()=>{teamBulkModal.classList.add('hidden');teamBulkModal.classList.remove('flex');};
+    // Per-member bulk modal
+    document.getElementById('tbody').addEventListener('click',(e)=>{
+      if(e.target.classList.contains('bulk-btn')){
+        const name=e.target.dataset.name;
+        document.getElementById('bulk-info').textContent=`Set status for ${name} (Mon–Fri)`;
+        document.getElementById('bulk-modal').dataset.name=name;
+        document.getElementById('bulk-modal').classList.remove('hidden');document.getElementById('bulk-modal').classList.add('flex');
+      }
+    });
+    document.querySelectorAll('.bulk-choice').forEach(btn=>{
+      btn.onclick=async()=>{
+        const name=document.getElementById('bulk-modal').dataset.name;
+        const st=btn.dataset.status;
+        const week=getWeek(currentDate);
+        for(const d of week){
+          if(d.getDay()>=1 && d.getDay()<=5){
+            const ds=toISO(d);
+            statuses[`${name}_${ds}`]={status:st,comment:''};
+            await apiSetStatus(name,ds,st,'');
+          }
+        }
+        render();
+        document.getElementById('bulk-modal').classList.add('hidden');document.getElementById('bulk-modal').classList.remove('flex');
+      };
+    });
+    document.getElementById('close-bulk').onclick=()=>{document.getElementById('bulk-modal').classList.add('hidden');document.getElementById('bulk-modal').classList.remove('flex');};
 
+    // Team bulk modal
+    document.getElementById('team-bulk-btn').onclick=()=>{document.getElementById('team-bulk-modal').classList.remove('hidden');document.getElementById('team-bulk-modal').classList.add('flex');};
+    document.getElementById('close-team-bulk').onclick=()=>{document.getElementById('team-bulk-modal').classList.add('hidden');document.getElementById('team-bulk-modal').classList.remove('flex');};
     document.querySelectorAll('.team-bulk-choice').forEach(btn=>{
-      btn.addEventListener('click',async()=>{
+      btn.onclick=async()=>{
         const st=btn.dataset.status;
         const week=getWeek(currentDate);
         for(const m of members){
           for(const d of week){
-            const dow=d.getDay();
-            if(dow>=1 && dow<=5){
+            if(d.getDay()>=1 && d.getDay()<=5){
               const ds=toISO(d);
               statuses[`${m.name}_${ds}`]={status:st,comment:''};
               await apiSetStatus(m.name,ds,st,'');
@@ -230,12 +285,11 @@
           }
         }
         render();
-        showToast('Team bulk update applied');
-        teamBulkModal.classList.add('hidden');teamBulkModal.classList.remove('flex');
-      });
+        document.getElementById('team-bulk-modal').classList.add('hidden');document.getElementById('team-bulk-modal').classList.remove('flex');
+      };
     });
 
-    // === Init ===
+    // Init
     (async()=>{
       const data=await apiGetData();
       members=data.members||[];
