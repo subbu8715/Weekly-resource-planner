@@ -16,8 +16,6 @@
     .status-unplanned-leave { background-color:#b91c1c; color:#fff; }
     .status-default { background-color:#f3f4f6; }
     .modal-backdrop { background: rgba(0,0,0,.5); }
-    .table-container::-webkit-scrollbar { display: none; }
-    .table-container { -ms-overflow-style:none; scrollbar-width:none; }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-800 antialiased">
@@ -27,7 +25,7 @@
       <p id="week-range" class="text-xl text-gray-600 mt-2"></p>
     </header>
 
-    <!-- Top Controls -->
+    <!-- Controls -->
     <div class="flex flex-wrap items-center justify-center gap-3 mb-6">
       <button id="prev-week" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">- Week</button>
       <button id="today" class="bg-white px-4 py-2 rounded-lg shadow font-semibold hover:bg-gray-200">Today</button>
@@ -37,16 +35,10 @@
 
     <!-- Grid -->
     <div class="bg-white rounded-xl shadow-lg p-4 overflow-hidden">
-      <div id="grid-wrap" class="table-container overflow-x-auto">
-        <table class="w-full border-collapse">
-          <thead id="thead"></thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-      <div id="empty" class="hidden text-center py-16">
-        <h3 class="text-xl font-semibold text-gray-700">Your planner is empty</h3>
-        <p class="text-gray-500 mt-2">Add people to the <b>Members</b> tab in the Google Sheet.</p>
-      </div>
+      <table class="w-full border-collapse">
+        <thead id="thead"></thead>
+        <tbody id="tbody"></tbody>
+      </table>
     </div>
 
     <!-- Legend -->
@@ -73,31 +65,11 @@
         <button class="status-choice status-planned-leave py-2 rounded font-bold" data-status="planned-leave">Planned Leave</button>
         <button class="status-choice status-unplanned-leave py-2 rounded font-bold" data-status="unplanned-leave">Unplanned Leave</button>
       </div>
-      <div class="mb-4">
-        <label for="status-comment" class="block text-sm font-medium text-gray-700">Comment</label>
-        <input type="text" id="status-comment" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"/>
-      </div>
-      <div class="text-right">
+      <input type="text" id="status-comment" class="border mt-2 w-full p-2 rounded" placeholder="Comment (optional)"/>
+      <div class="text-right mt-4">
         <button id="clear-status" class="text-red-600 font-semibold mr-2">Clear</button>
         <button id="close-status" class="bg-gray-200 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 mr-2">Cancel</button>
         <button id="save-status" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Bulk Modal (Per Member) -->
-  <div id="bulk-modal" class="modal-backdrop fixed inset-0 hidden items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
-      <h2 class="text-2xl font-bold mb-1">Bulk Update (Mon–Fri)</h2>
-      <p id="bulk-info" class="text-gray-600 mb-4"></p>
-      <div class="grid grid-cols-1 gap-2 mb-2">
-        <button class="bulk-choice status-wfo py-2 rounded font-bold" data-status="wfo">Work from Office</button>
-        <button class="bulk-choice status-wfh py-2 rounded font-bold" data-status="wfh">Work from Home</button>
-        <button class="bulk-choice status-planned-leave py-2 rounded font-bold" data-status="planned-leave">Planned Leave</button>
-        <button class="bulk-choice status-unplanned-leave py-2 rounded font-bold" data-status="unplanned-leave">Unplanned Leave</button>
-      </div>
-      <div class="text-right">
-        <button id="close-bulk" class="bg-gray-200 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300">Close</button>
       </div>
     </div>
   </div>
@@ -106,10 +78,10 @@
   <div id="team-bulk-modal" class="modal-backdrop fixed inset-0 hidden items-center justify-center p-4 z-50">
     <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
       <h2 class="text-2xl font-bold mb-1">Team Bulk Update (Mon–Fri)</h2>
-      <p class="text-gray-600 mb-4">This will set the same status for <b>all team members</b> for Mon–Fri of this week.</p>
+      <p class="text-gray-600 mb-4">Set the same status for all team members this week (Mon–Fri).</p>
       <div class="grid grid-cols-1 gap-2 mb-2">
-        <button class="team-bulk-choice status-wfo py-2 rounded font-bold" data-status="wfo">Work from Office</button>
-        <button class="team-bulk-choice status-wfh py-2 rounded font-bold" data-status="wfh">Work from Home</button>
+        <button class="team-bulk-choice status-wfo py-2 rounded font-bold" data-status="wfo">WFO</button>
+        <button class="team-bulk-choice status-wfh py-2 rounded font-bold" data-status="wfh">WFH</button>
         <button class="team-bulk-choice status-planned-leave py-2 rounded font-bold" data-status="planned-leave">Planned Leave</button>
         <button class="team-bulk-choice status-unplanned-leave py-2 rounded font-bold" data-status="unplanned-leave">Unplanned Leave</button>
       </div>
@@ -118,9 +90,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Toast -->
-  <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden"></div>
 
   <script>
     const API_BASE = "https://script.google.com/macros/s/AKfycbyKziIiPKCEG8bjnEvYw2oFh0FehfLUCJcB6JKCqIypA-KwNsKCb2qnfAF7hbPKjjah/exec";
@@ -133,9 +102,8 @@
     const toISO = d => d.toISOString().split('T')[0];
     const getWeek = (date) => {
       const monday = new Date(date);
-      const day = monday.getDay();
-      const diff = day === 0 ? -6 : 1 - day;
-      monday.setDate(monday.getDate()+diff);
+      const diff = monday.getDay() === 0 ? -6 : 1 - monday.getDay();
+      monday.setDate(monday.getDate() + diff);
       return Array.from({length:7},(_,i)=>{
         const d = new Date(monday);
         d.setDate(monday.getDate()+i);
@@ -144,55 +112,36 @@
     };
 
     async function apiGetData(){
-      const res = await fetch(API_BASE+"?action=getData");
+      const res = await fetch(API_BASE+"?action=getData&ts="+Date.now());
       return res.json();
     }
 
     async function apiSetStatus(name,date,status,comment){
       await fetch(API_BASE,{
         method:"POST",
-        body: JSON.stringify({ 
-          action:"setStatus",
-          member:name,
-          date:date,
-          status:status,
-          comment:comment 
-        })
+        body: JSON.stringify({action:"setStatus", member:name, date:date, status:status, comment:comment})
       });
     }
 
     function render(){
       const week = getWeek(currentDate);
-      const start = week[0].toLocaleDateString('en-US',{month:'short',day:'numeric'});
-      const end = week[6].toLocaleDateString('en-US',{month:'short',day:'numeric'});
-      document.getElementById('week-range').textContent = `${start} - ${end}`;
-
-      const thead = document.getElementById('thead');
-      const tbody = document.getElementById('tbody');
-      thead.innerHTML="";
-      const tr = document.createElement('tr');
-      tr.innerHTML=`<th class="p-2">Team Member</th>`+week.map(d=>`
-        <th class="p-2 text-center">${d.toLocaleDateString('en-US',{weekday:'short'})}<br>${d.getDate()}</th>`).join('');
+      document.getElementById('week-range').textContent = 
+        `${week[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} - ${week[6].toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+      
+      const thead=document.getElementById('thead'), tbody=document.getElementById('tbody');
+      thead.innerHTML=""; tbody.innerHTML="";
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<th class="p-2">Team Member</th>`+
+        week.map(d=>`<th class="p-2 text-center">${d.toLocaleDateString('en-US',{weekday:'short'})}<br>${d.getDate()}</th>`).join('');
       thead.appendChild(tr);
 
-      tbody.innerHTML="";
       members.forEach(m=>{
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td class="p-2 font-semibold">${m.name}<br>
-          <span class="text-sm text-gray-500">${m.role}</span><br>
-          <span class="text-xs text-gray-500">Shift: ${m.shift}</span><br>
-          <span class="text-xs text-gray-500">Region: ${m.region}</span><br>
-          <button class="bulk-btn text-xs text-blue-600 underline mt-1" data-name="${m.name}">Bulk Edit</button>
-        </td>`;
+        tr.innerHTML=`<td class="p-2 font-semibold">${m.name}<br><span class="text-sm text-gray-500">${m.role}</span><br><span class="text-xs">Shift: ${m.shift}</span><br><span class="text-xs">Region: ${m.region}</span></td>`;
         week.forEach(d=>{
-          const ds=toISO(d);
-          const key=`${m.name}_${ds}`;
-          const st=statuses[key]?.status;
+          const ds=toISO(d), key=`${m.name}_${ds}`, st=statuses[key]?.status;
           const klass=st?`status-${st}`:'status-default';
-          const cell=`<div class="status-cell rounded-lg flex items-center justify-center ${klass}" 
-             data-name="${m.name}" data-date="${ds}" title="${statuses[key]?.comment||''}">
-             ${st?st.toUpperCase().replace('-',' '):''}</div>`;
-          tr.innerHTML+=`<td class="p-1 text-center">${cell}</td>`;
+          tr.innerHTML+=`<td class="p-1 text-center"><div class="status-cell rounded-lg flex items-center justify-center ${klass}" data-name="${m.name}" data-date="${ds}">${st?st.toUpperCase().replace('-',' '):''}</div></td>`;
         });
         tbody.appendChild(tr);
       });
@@ -213,88 +162,47 @@
       document.getElementById('status-modal').classList.remove('hidden');document.getElementById('status-modal').classList.add('flex');
     };
 
-    // Status modal events
+    // Save status
     document.querySelectorAll('.status-choice').forEach(btn=>{
       btn.onclick=async()=>{
-        const st=btn.dataset.status;
-        const key=`${selectedCell.name}_${selectedCell.date}`;
-        statuses[key]={status:st,comment:document.getElementById('status-comment').value};
-        await apiSetStatus(selectedCell.name,selectedCell.date,st,document.getElementById('status-comment').value);
-        render();
+        await apiSetStatus(selectedCell.name,selectedCell.date,btn.dataset.status,document.getElementById('status-comment').value);
+        const data=await apiGetData();members=data.members;statuses=data.statuses;render();
         document.getElementById('status-modal').classList.add('hidden');document.getElementById('status-modal').classList.remove('flex');
       };
     });
     document.getElementById('save-status').onclick=async()=>{
-      const key=`${selectedCell.name}_${selectedCell.date}`;
-      const comment=document.getElementById('status-comment').value;
-      if(statuses[key]) statuses[key].comment=comment;
-      await apiSetStatus(selectedCell.name,selectedCell.date,statuses[key]?.status||'',comment);
-      render();
+      await apiSetStatus(selectedCell.name,selectedCell.date,statuses[`${selectedCell.name}_${selectedCell.date}`]?.status||'',document.getElementById('status-comment').value);
+      const data=await apiGetData();members=data.members;statuses=data.statuses;render();
       document.getElementById('status-modal').classList.add('hidden');document.getElementById('status-modal').classList.remove('flex');
     };
     document.getElementById('clear-status').onclick=async()=>{
-      const key=`${selectedCell.name}_${selectedCell.date}`;
-      statuses[key]={status:'',comment:''};
       await apiSetStatus(selectedCell.name,selectedCell.date,'','');
-      render();
+      const data=await apiGetData();members=data.members;statuses=data.statuses;render();
       document.getElementById('status-modal').classList.add('hidden');document.getElementById('status-modal').classList.remove('flex');
     };
     document.getElementById('close-status').onclick=()=>{document.getElementById('status-modal').classList.add('hidden');document.getElementById('status-modal').classList.remove('flex');};
-
-    // Per-member bulk modal
-    document.getElementById('tbody').addEventListener('click',(e)=>{
-      if(e.target.classList.contains('bulk-btn')){
-        const name=e.target.dataset.name;
-        document.getElementById('bulk-info').textContent=`Set status for ${name} (Mon–Fri)`;
-        document.getElementById('bulk-modal').dataset.name=name;
-        document.getElementById('bulk-modal').classList.remove('hidden');document.getElementById('bulk-modal').classList.add('flex');
-      }
-    });
-    document.querySelectorAll('.bulk-choice').forEach(btn=>{
-      btn.onclick=async()=>{
-        const name=document.getElementById('bulk-modal').dataset.name;
-        const st=btn.dataset.status;
-        const week=getWeek(currentDate);
-        for(const d of week){
-          if(d.getDay()>=1 && d.getDay()<=5){
-            const ds=toISO(d);
-            statuses[`${name}_${ds}`]={status:st,comment:''};
-            await apiSetStatus(name,ds,st,'');
-          }
-        }
-        render();
-        document.getElementById('bulk-modal').classList.add('hidden');document.getElementById('bulk-modal').classList.remove('flex');
-      };
-    });
-    document.getElementById('close-bulk').onclick=()=>{document.getElementById('bulk-modal').classList.add('hidden');document.getElementById('bulk-modal').classList.remove('flex');};
 
     // Team bulk modal
     document.getElementById('team-bulk-btn').onclick=()=>{document.getElementById('team-bulk-modal').classList.remove('hidden');document.getElementById('team-bulk-modal').classList.add('flex');};
     document.getElementById('close-team-bulk').onclick=()=>{document.getElementById('team-bulk-modal').classList.add('hidden');document.getElementById('team-bulk-modal').classList.remove('flex');};
     document.querySelectorAll('.team-bulk-choice').forEach(btn=>{
       btn.onclick=async()=>{
-        const st=btn.dataset.status;
         const week=getWeek(currentDate);
         for(const m of members){
           for(const d of week){
-            if(d.getDay()>=1 && d.getDay()<=5){
-              const ds=toISO(d);
-              statuses[`${m.name}_${ds}`]={status:st,comment:''};
-              await apiSetStatus(m.name,ds,st,'');
+            if(d.getDay()>=1&&d.getDay()<=5){
+              await apiSetStatus(m.name,toISO(d),btn.dataset.status,'');
             }
           }
         }
-        render();
+        const data=await apiGetData();members=data.members;statuses=data.statuses;render();
         document.getElementById('team-bulk-modal').classList.add('hidden');document.getElementById('team-bulk-modal').classList.remove('flex');
       };
     });
 
-    // Init
     (async()=>{
       const data=await apiGetData();
-      members=data.members||[];
-      statuses=data.statuses||{};
-      render();
+      members=data.members||[];statuses=data.statuses||{};render();
     })();
   </script>
 </body>
